@@ -1,0 +1,15 @@
+[package]
+name = "os"
+version = "0.1.0"
+authors = ["Kohavi, Yuval <yuval.kohavi@gmail.com>"]
+
+[dependencies]
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
+[lib]
+crate-type = ["staticlib"]
