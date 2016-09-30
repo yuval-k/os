@@ -1,19 +1,25 @@
-interrupt_vector_table:
-    b . @ Reset
-    b . 
-    b . @ SWI instruction
-    b . 
-    b .
-    b .
-    b .
-    b .
 
-#define STACK_SIZE 0x1000
+// small boot stack, when mmu is enabled gonna get a better one..
+#define STACK_SIZE 0x800
+#define L1_TABLE_ALIGN 14
+#define L1_TABLE_SIZE 4*0x1000
 
-.comm stack, STACK_SIZE @ Reserve 64k stack in the BSS
+.section .stub
+
 _start:
     .globl _start
-    ldr sp, =stack+STACK_SIZE @ Set up the stack
-    bl rust_main @ Jump to the main function
+    .globl l1pagetable
+    ldr sp, =temp_stub_stack @ Set up the stack
+    bl integrator_main @ Jump to the main function
 1: 
     b 1b @ Halt
+
+.ltorg
+.section .stub.data
+.align 4
+.space STACK_SIZE
+temp_stub_stack:
+.space 4
+.align L1_TABLE_ALIGN
+l1pagetable:
+.space L1_TABLE_SIZE

@@ -2,25 +2,36 @@ OUTPUT_ARCH(arm)
 ENTRY(_start)
 SECTIONS
 {
-	. = 0;
+	. = 0x1000;
 	_physical_begin = . ;
 /*	TODO move stub stuff to stub section .stub:
     and have the kernel be in a virtual address
  */
 
 	_begin =  . ;
-	/* Set virtual address here.
-	like so:
-	 . = 0xC0008000;
-	 */
-	.text :
-	AT (_begin)
+    _stub_begin = .;
+
+	.stub :
+	AT (_stub_begin)
 	{
-		*(.start)
+		*(.stub)
+	}
+	.stub.data :
+	{
+		*(.stub.data)
+	}
+   /* _stub_end = ALIGN(0x1000);  hack till we improve the stub... kernel needs to be 1mb align*/
+    _stub_end = ALIGN(0x100000);
+	/* kernel virtual address! */
+	. = 0xC0000000;
+	_kernel_start_phy = _stub_end;
+	_kernel_start_virt = .;
+
+	.text :
+	AT (_stub_end)
+	{
 		*(.text)
 		*(.text.*)
-		*(.stub)
-		*(.note*)
 	}
 	_etext = . ;
 
@@ -30,6 +41,11 @@ SECTIONS
 		*(.rodata)
 		*(.rodata.*)
 	}
+
+    .data.rel.ro : 
+	AT (LOADADDR(.text) + (ADDR(.data.rel.ro) - ADDR(.text))) {
+        *(.data.rel.ro.local*) *(.data.rel.ro .data.rel.ro.*)
+    }
 
 	.initfini :
 	AT (LOADADDR(.text) + (ADDR(.initfini) - ADDR(.text)))
@@ -82,6 +98,9 @@ SECTIONS
 		*(.bootstack)
 		__init_bss_end = . ;
 	}
+
 	_end = . ;
 	PROVIDE (end = .) ;
+	_kernel_end_virt = end;
+
 }

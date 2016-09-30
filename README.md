@@ -34,3 +34,9 @@ make toolchain # do this just once
 make kernel.img
 make emulate
 ```
+
+
+Stub:
+builds page table - identity page table for itself and devices, and proper virtual table for the kernel.
+kernel will later remove the stub and remap memory
+

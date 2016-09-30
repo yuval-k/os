@@ -1,18 +1,26 @@
 #![feature(lang_items)]
 #![no_std]
-
+#![feature(asm)]
+#![feature(naked_functions)] 
 #![feature(core_intrinsics)]
 
 pub mod device;
 pub mod arch;
+pub mod mem;
 
 use arch::arm::integrator::serial;
 use device::serial as devserial;
 
+use ::arch::arm::vector;
 
 
-#[no_mangle]
-pub extern fn rust_main() {
+pub fn rust_main() {
+    vector::build_vector_table();
+    
+    // turn on identity map for a lot of bytes
+ //   tun_on_identity_map()
+ //   build_virtual_table() // we need phy2virt; we need frame alocator with ranges;
+ //   flush_mem_and_switch_table()
     // turn on virtual memory and map kernel
 
     // fix page table and jump to virtual main.
@@ -29,9 +37,3 @@ pub extern fn rust_main() {
 #[lang = "eh_personality"] extern fn eh_personality() {}
 #[lang = "panic_fmt"] extern fn panic_fmt() -> ! {loop{}}
 
-
-#[no_mangle]
-pub unsafe fn __aeabi_unwind_cpp_pr0() -> ()
-{
-    loop {}
-}
