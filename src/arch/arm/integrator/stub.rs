@@ -1,11 +1,9 @@
 #![link_section=".stub"]
 
 use ::arch::arm::mem;
-// enum LinkerPtr{}
 
 extern "C" {
     fn stub_begin_glue() -> *const usize;
-    fn stub_end_glue() -> *const usize;
     fn kernel_start_phy_glue() -> *const usize;
     fn kernel_start_virt_glue() -> *const usize;
     fn kernel_end_virt_glue() -> *const usize;
@@ -19,31 +17,19 @@ extern "C" {
     // goal of this function is to setup correct virtual table for kernel and then jump to it.
     // the kernel should cleanup the stub functions afterwards.
 
-    // use SimplePageTable to map big entries:
-    // have room in assembly for l1,l2 page tables.
-    // 
-    // - add stub address
-    // map_page(physical_stub_address,physical_stub_address, len)
-    // - map address zero to zero
-    //  map_page(0,0, len)
-    // - map kernel physical address to virtual address
-    //  map_page(physical_kernel_address,virtual_kernel_address, len)
-    // - first avail phys address to stack address
-    //  map_page(physical_right_after_kernel_end, stack virtual, 4kb)
-    //
-
-    // the kernel can do user kernel mode bullshit, we gonna go all in kernel mode and TTB1?
-    // turn on mmu !
+    // We use a very simple to map just the bare minimum using just the l1 table and section mappings.
     
-    // switch stack and go to rust main! in assembly.. :
-
-    // jump to rust main - rust main is virtual!!! no looking back! TODO set stack to right value
+    // we map the stub, as we need it till we jump to virtual main
+    // map some stack space
+    // map the kernel it self to the right virtual place
+    
+    // then switch stack and go to rust main! in assembly.. :
+ 
     // rust main should take the page information (stub, kernel, stack) and remove the stub
     // call arm_main() that sets up diff stacks for diff modes
     // arm_main will call rust_main()
     
     let stub_begin :  usize = unsafe{ stub_begin_glue() as usize};
-    let stub_end :  usize = unsafe{ stub_end_glue() as usize};
     let kernel_start_phy :  usize = unsafe{ kernel_start_phy_glue() as usize};
     let kernel_start_virt :  usize = unsafe{ kernel_start_virt_glue() as usize};
     let kernel_end_virt :  usize = unsafe{ kernel_end_virt_glue() as usize};
@@ -52,16 +38,15 @@ extern "C" {
 
     //VIRTAL TABLE TIME! 
     // find next available physical frame
-    let l1tableUnsafe : *const u32 = unsafe{ l1pagetable_glue() as *mut _};
-    const l1tableEntries : usize = 4096; //4096 entries of 1MB each (=4gb address space). each entry is 4 bytes.
+    let l1table_unsafe : *const u32 = unsafe{ l1pagetable_glue() as *mut _};
 
     // 1mb aligned stack pointer. 0xD000000 can be more random
-    const stack_pointer_begin : usize = 0xD000000;
+    const STACK_POINTER_BEGIN : usize = 0xD000000;
     // place the stack physical frame, 1mb aligned and after the page table
-    let stack_pointer_phy : usize = ((l1tableUnsafe as usize) +  (4*l1tableEntries)  + 2*(1 << 20)) & MB_MASK;
-    const stack_pointer_end : usize = 0xD000000 +  (1 << 20) - 1;
+    let stack_pointer_phy : usize = ((l1table_unsafe as usize) +  (4*mem::L1TABLE_ENTRIES)  + 2*(1 << 20)) & MB_MASK;
+    const STACK_POINTER_END : usize = 0xD000000 +  (1 << 20) - 1;
 
-    // This code doesn't use only most basic rust.
+    // This code here only uses the most basic rust.
     // That's because we want to make sure no rust library functions are called as they reside in unmapped memory
     // (where all the code lives)
 
@@ -69,10 +54,10 @@ extern "C" {
 
     // can't use iterator loop as the code is not mapped yet :(
     let mut i = 0;
-    while i < l1tableEntries {
+    while i < mem::L1TABLE_ENTRIES {
         // can't use offset cause it is not mapped yet :(
-        let curEntry : *mut u32 = ((l1tableUnsafe as usize) + 4*i) as *mut u32;
-        unsafe{*curEntry = 0;}
+        let cur_entry : *mut u32 = ((l1table_unsafe as usize) + 4*i) as *mut u32;
+        unsafe{*cur_entry = 0;}
         i += 1;
     }
 
@@ -83,45 +68,58 @@ extern "C" {
 
     // http://stackoverflow.com/questions/16383007/what-is-the-right-way-to-update-mmu-translation-table
     // see here: http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0333h/I1029222.html
-    // map a super section to the stub.
-    // map a super section to the kernel.
-    // map a super section for the stack
+    // map a section to the stub.
+    // map a section to the kernel.
+    // map a section for the stack
     // give control to the kernel and let it sort this shit out in virtual mode.
     unsafe {
-        // TODO: test if kernel is larger than 1mb
         {
             // TODO make sure not more space is needed here...
             let offset = (stub_begin >> 20) as usize;
-            let curEntry : *mut u32 = ((l1tableUnsafe as usize) + 4*offset) as *mut u32;
-            *curEntry   = (0b10 | 0xc | (0b11 << 10 ) | (stub_begin & MB_MASK)) as u32;
+            let cur_entry : *mut u32 = ((l1table_unsafe as usize) + 4*offset) as *mut u32;
+            *cur_entry   = (0b10 | 0xc | (0b11 << 10 ) | (stub_begin & MB_MASK)) as u32;
         }
         {
+            // TODO: test if kernel is larger than 1mb
             // TODO make sure that when allocation 1mb address the addresses are 1mb aligned
             // TODO this will not work cause kernel is not 1mb aligned in physical memory
             let offset = (kernel_start_virt >> 20) as usize;
-            let curEntry : *mut u32 = ((l1tableUnsafe as usize) + 4*offset) as *mut u32;
-            *curEntry   = (0b10 | 0xc | (0b11 << 10 ) | (kernel_start_phy & MB_MASK)) as u32;
+            let cur_entry : *mut u32 = ((l1table_unsafe as usize) + 4*offset) as *mut u32;
+            *cur_entry   = (0b10 | 0xc | (0b11 << 10 ) | (kernel_start_phy & MB_MASK)) as u32;
         }
         {
-            let offset = (stack_pointer_begin >> 20) as usize;
-            let curEntry : *mut u32 = ((l1tableUnsafe as usize) + 4*offset) as *mut u32;
-            *curEntry   = (0b10 | 0xc | (0b11 << 10 ) | (stack_pointer_phy & MB_MASK)) as u32;
+            let offset = (STACK_POINTER_BEGIN >> 20) as usize;
+            let cur_entry : *mut u32 = ((l1table_unsafe as usize) + 4*offset) as *mut u32;
+            *cur_entry   = (0b10 | 0xc | (0b11 << 10 ) | (stack_pointer_phy & MB_MASK)) as u32;
         }
     }
-    ::arch::arm::mem::memory_write_barrier();
-    ::arch::arm::mem::disable_access_checks();
-    ::arch::arm::mem::set_ttb0(l1tableUnsafe as *const());
-    ::arch::arm::mem::set_ttb1(l1tableUnsafe as *const());
+    
+    // write barrier probably not needed but just in case..
+    mem::memory_write_barrier();
+    mem::invalidate_caches();
+    mem::invalidate_tlb();
+    mem::disable_access_checks();
+    mem::set_ttb0(l1table_unsafe as *const());
+    mem::set_ttb1(l1table_unsafe as *const());
     // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0433a/CIHHACFF.html
-    ::arch::arm::mem::set_ttbcr(0);
-    // TODO turn on caches
-    ::arch::arm::mem::enable_mmu();
+    mem::set_ttbcr(0);
+    // enable_mmu also turns on caches
+    mem::enable_mmu();
     
     // now switch stack and call arm main:
     unsafe {
       asm!("mov sp, $0
+            mov r0, $2
+            mov r1, $3
+            mov r2, $4
             b $1 "
-            :: "r"(stack_pointer_end) ,"i"(::arch::arm::arm_main as extern "C" fn() -> !) : "sp" : "volatile"
+            :: 
+            "r"(STACK_POINTER_END) ,
+            "i"(::arch::arm::arm_main as extern "C" fn(_,_,_) -> !),
+            "r"(kernel_start_phy) ,
+            "r"(kernel_start_virt) ,
+            "r"(kernel_end_virt)
+            : "sp","r0","r1","r2" : "volatile"
       )
     }
 
