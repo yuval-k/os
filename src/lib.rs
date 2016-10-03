@@ -3,6 +3,10 @@
 #![feature(asm)]
 #![feature(naked_functions)] 
 #![feature(core_intrinsics)]
+#![feature(range_contains)]
+#![feature(step_by)]
+
+extern crate rlibc;
 
 pub mod device;
 pub mod arch;
@@ -34,6 +38,12 @@ pub fn rust_main() {
     w.write_byte('l' as u8);
 }
 
-#[lang = "eh_personality"] extern fn eh_personality() {}
-#[lang = "panic_fmt"] extern fn panic_fmt() -> ! {loop{}}
+#[lang = "eh_personality"]
+extern fn eh_personality() {
+}
+
+#[lang = "panic_fmt"]
+extern fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
+    loop{}
+}
 

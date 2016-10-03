@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Kohavi, Yuval <yuval.kohavi@gmail.com>"]
 
 [dependencies]
+rlibc = "1.0.0"
 
 [profile.dev]
 panic = "abort"

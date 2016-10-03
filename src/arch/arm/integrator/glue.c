@@ -27,9 +27,14 @@ __attribute__ ((section(".stub"))) unsigned int* kernel_end_virt_glue() {
         return (unsigned int*)&_kernel_end_virt;
 }
 
-extern int l1pagetable;
+extern int stub_l1pagetable;
 __attribute__ ((section(".stub"))) unsigned int* l1pagetable_glue() {
-        return (unsigned int*)&l1pagetable;
+        return (unsigned int*)&stub_l1pagetable;
+}
+
+extern int stub_l2pagetable;
+__attribute__ ((section(".stub"))) unsigned int* l2pagetable_glue() {
+        return (unsigned int*)&stub_l2pagetable;
 }
 
 
