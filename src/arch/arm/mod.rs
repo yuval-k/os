@@ -5,22 +5,17 @@ pub mod cpu;
 
 
 #[no_mangle]
-pub extern "C" fn arm_main(mapper : &mut ::mem::MemoryMapper) -> !{
+pub extern "C" fn arm_main(mapper : &mut ::mem::MemoryMapper, frameAllocator : & mut ::mem::FrameAllocator) -> !{
 
     // map vector tables
-    mapper.map(::mem::PhysicalAddress(0), vector::VECTORS_ADDR, 1);
+    mapper.map(frameAllocator, ::mem::PhysicalAddress(0), vector::VECTORS_ADDR, 1);
     vector::build_vector_table();
+  // TODO build_mode_stacks();
+  // TODO install_interrupt_handlers();
+  // TODO init_heap();
 
-    // now we can create a normal page table!
-    // map the vectors, stack and kernel as normal memory and then map the devices as device memory
 /*
-    let pagetable : pagetable;
-
-    pagetable.map(kernel_start_phy, kernel_start_virt, kernel_end_virt-kernel_start_virt)
-    pagetable.map(0, 0x..., PAGE_SIZE)
-    pagetable.map( get_phys_stack, getsp(), PAGE_SIZE, NORMAL)
-    pagetable.map( mmio, ?, PAGE_SIZE)
-
+    TODO: to support user space, we can use the MPU:
     memoryProtection.setRegion(kernel_start_virt, kernel_start_virt+WHATEVER, NORMAL)
     memoryProtection.map( mmio, whatever, PAGE_SIZE, DEVICE)
 */

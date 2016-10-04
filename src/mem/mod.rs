@@ -68,5 +68,5 @@ pub trait FrameAllocator {
 }
 
 pub trait MemoryMapper {
-    fn map(&mut self, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress, length : usize);
+    fn map(&mut self, fa : &mut FrameAllocator, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress, length : usize);
 }

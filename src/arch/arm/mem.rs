@@ -302,7 +302,7 @@ fn getInitFrames(fa : & mut ::mem::FrameAllocator) -> [::mem::PhysicalAddress;5]
 fn up(a : usize) -> usize {(a + PAGE_MASK) & (!PAGE_MASK)}
 
 // TODO fix frame allocator to not use stub and stack.
-pub fn init_page_table<'a>(l1table_identity : ::mem::VirtualAddress, l2table_identity : ::mem::VirtualAddress, ml : &MemLayout, fa : &'a mut ::mem::FrameAllocator) -> PageTable<'a> {
+pub fn init_page_table(l1table_identity : ::mem::VirtualAddress, l2table_identity : ::mem::VirtualAddress, ml : &MemLayout, fa : & mut ::mem::FrameAllocator) -> PageTable {
         let mut active_table = unsafe{ L1Table::from_virt_address(l1table_identity)};
         let mut l2 = unsafe{ L2Table::from_virt_address(l2table_identity)};
 
@@ -444,38 +444,35 @@ pub fn init_page_table<'a>(l1table_identity : ::mem::VirtualAddress, l2table_ide
 
         PageTable {
           descriptors : newl1,
-          frameallocator : fa,
           tmpMap : newl2,
         }
 
 }
 
-pub struct PageTable<'a> {
+pub struct PageTable {
    pub descriptors : L1Table,
-   pub frameallocator : &'a mut ::mem::FrameAllocator,
-
    tmpMap : L2Table,
 }
 
 
-impl<'a> PageTable<'a> {
+impl PageTable {
 
-  fn map_single(&mut self, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress) {
-      self.map_single_descriptor(L2TableDescriptor::new(p), v)
+  fn map_single(&mut self, frameallocator : & mut ::mem::FrameAllocator, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress) {
+      self.map_single_descriptor(frameallocator, L2TableDescriptor::new(p), v)
   }
 
-  pub fn map_device(&mut self, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress) {
-      self.map_single_descriptor(L2TableDescriptor::new_device(p), v)
+  pub fn map_device(&mut self, frameallocator : & mut ::mem::FrameAllocator, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress) {
+      self.map_single_descriptor(frameallocator, L2TableDescriptor::new_device(p), v)
   }
 
   // TODO: clear interrupts somewhere here? maybe not
-  fn map_single_descriptor(&mut self, p : L2TableDescriptor, v : ::mem::VirtualAddress) {
+  fn map_single_descriptor(&mut self, frameallocator : & mut ::mem::FrameAllocator, p : L2TableDescriptor, v : ::mem::VirtualAddress) {
     
     let l1Index = v.0 >> MB_SHIFT;
     // get physical addresss
     // temporary map it to here using the active page table
     if ! self.descriptors[l1Index].is_present() {
-      let frame = self.frameallocator.allocate(1).unwrap();
+      let frame = frameallocator.allocate(1).unwrap();
       self.descriptors[l1Index] = L1TableDescriptor::new(frame);
     }
 
@@ -516,11 +513,11 @@ impl<'a> PageTable<'a> {
     // page should be mapped now
   }
 }
-impl<'a> ::mem::MemoryMapper for PageTable<'a> {
+impl ::mem::MemoryMapper for PageTable {
 
-  fn map(&mut self, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress, length : usize) {
+  fn map(&mut self, fa : &mut FrameAllocator, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress, length : usize) {
     for i in (0 ..length).step_by(PAGE_SIZE) {
-      self.map_single(p.offset(i as isize), v.offset(i as isize));
+      self.map_single(fa, p.offset(i as isize), v.offset(i as isize));
     }
   }
 

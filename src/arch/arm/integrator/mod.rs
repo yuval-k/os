@@ -30,14 +30,14 @@ pub extern "C" fn integrator_main(
 
     let mut pageTable = mem::init_page_table(::mem::VirtualAddress(l1table_id), ::mem::VirtualAddress(l2table_space_id), &ml , &mut frameAllocator);
 
-    pageTable.map_device(serial::SERIAL_BASE_PADDR, serial::SERIAL_BASE_VADDR);
+    pageTable.map_device(&mut frameAllocator, serial::SERIAL_BASE_PADDR, serial::SERIAL_BASE_VADDR);
 
     // print to serial should work now!
 
     let mut w = &mut serial::Writer::new();
-    w.write_byte('Y' as u8);
+    w.writeln("Welcome home!");
 
-    ::arch::arm::arm_main(&mut pageTable);
+    ::arch::arm::arm_main(&mut pageTable, &mut frameAllocator);
 
     loop {}
 }
