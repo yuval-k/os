@@ -159,37 +159,37 @@ pub fn set_stack_for_modes(stack_base : ::mem::VirtualAddress) {
             mrs r1, cpsr
             bic r1, r1, $1
 	          orr r1, r1, $2   /* FIQ */
-            msr cpsr, r1
+            msr cpsr_c, r1
             mov sp, r0
             
             add r0,r0, #0x1000
             bic r1, r1, $1
 	          orr r1, r1, $3  /* IRQ */
-            msr cpsr, r1
+            msr cpsr_c, r1
             mov sp, r0
             
             add r0,r0, #0x1000
             bic r1, r1, $1
 	          orr r1, r1, $4  /* ABRT */
-            msr cpsr, r1
+            msr cpsr_c, r1
             mov sp, r0
             
             add r0,r0, #0x1000
             bic r1, r1, $1
 	          orr r1, r1, $5  /* UNDEF */
-            msr cpsr, r1
+            msr cpsr_c, r1
             mov sp, r0
             
             add r0,r0, #0x1000
             bic r1, r1, $1
 	          orr r1, r1, $6  /* SYS */
-            msr cpsr, r1
+            msr cpsr_c, r1
             mov sp, r0
             
 
             bic r1, r1, $1
 	          orr r1, r1, $7 /* back to supervisor mode */
-            msr cpsr, r1
+            msr cpsr_c, r1
             "
             :: 
             "r"(stack_base.0),
@@ -200,7 +200,34 @@ pub fn set_stack_for_modes(stack_base : ::mem::VirtualAddress) {
             "i"(UNDEF_MODE),
             "i"(SYS_MODE),
             "i"(SUPER_MODE)
-            : "sp","r0","r1" : "volatile"
+            : "sp","r0","r1","cpsr" : "volatile"
+      )
+    }
+}
+
+
+pub fn disable_interrupts() {
+    unsafe {
+      asm!("mrs r0, cpsr
+            orr r0, r0, $0
+            msr cpsr_c, r0            
+            "
+            :: 
+            "i"(DISABLE_FIQ | DISABLE_IRQ)
+            : "r0", "cpsr" : "volatile"
+      )
+    }
+}
+
+pub fn enable_interrupts() {
+    unsafe {
+      asm!("mrs r0, cpsr
+            bic r0, r0, $0
+            msr cpsr_c, r0            
+            "
+            :: 
+            "i"(DISABLE_FIQ | DISABLE_IRQ)
+            : "r0", "cpsr" : "volatile"
       )
     }
 }
