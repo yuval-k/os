@@ -87,10 +87,10 @@ impl<'a>  LameFrameAllocator<'a> {
 
 }
 
-pub struct L1TableSectionDescriptor(u32);
-pub struct L1TableCoarseDescriptor(u32);
-
+#[repr(packed)]
 pub struct L2TableDescriptor(u32);
+
+#[repr(packed)]
 pub struct L1TableDescriptor(u32);
 
 pub struct FirstLevelTableDescriptor(u32);
@@ -190,14 +190,12 @@ impl L2TableDescriptor {
   }
 }
 // repr C might not be needed, but let's be on the safe side.
-#[repr(C)]
+#[repr(packed)]
 pub struct L1Table {
-  #[repr(C)]
    pub descriptors : &'static mut [L1TableDescriptor],
 }
-#[repr(C)]
+#[repr(packed)]
 pub struct L2Table {
-   #[repr(C)]
    pub descriptors : &'static mut [L2TableDescriptor],
 }
 
