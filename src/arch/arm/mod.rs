@@ -5,7 +5,11 @@ pub mod cpu;
 
 
 #[no_mangle]
-pub extern "C" fn arm_main(kernel_start_phy : usize, kernel_start_virt : usize, kernel_end_virt : usize) -> !{
+pub extern "C" fn arm_main(mapper : &mut ::mem::MemoryMapper) -> !{
+
+    // map vector tables
+    mapper.map(::mem::PhysicalAddress(0), vector::VECTORS_ADDR, 1);
+    vector::build_vector_table();
 
     // now we can create a normal page table!
     // map the vectors, stack and kernel as normal memory and then map the devices as device memory
@@ -20,13 +24,6 @@ pub extern "C" fn arm_main(kernel_start_phy : usize, kernel_start_virt : usize, 
     memoryProtection.setRegion(kernel_start_virt, kernel_start_virt+WHATEVER, NORMAL)
     memoryProtection.map( mmio, whatever, PAGE_SIZE, DEVICE)
 */
-
-    let x = ["Hello", "World", "!"];
-    let y = x;
-
-    for i in 1..10 {
-        
-    }
 
     ::rust_main();
 

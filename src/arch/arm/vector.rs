@@ -1,3 +1,4 @@
+use core::slice;
 
 /*
 based on:
@@ -24,8 +25,8 @@ vector_start
 vector_end:
 
 */ 
+pub const VECTORS_ADDR : ::mem::VirtualAddress  = ::mem::VirtualAddress(0xea00_0000);
 
-static mut vec_table : [u32; 4*8*2] = [0; 4*8*2];
  
 #[naked]
  fn vector_table_asm() {
@@ -37,6 +38,8 @@ static mut vec_table : [u32; 4*8*2] = [0; 4*8*2];
 // TODO change vec_table to point to the right place in memory
 pub fn build_vector_table() {
     unsafe {
+        let mut vec_table : &'static mut [u32] = slice::from_raw_parts_mut(VECTORS_ADDR.0 as *mut u32, 4*8*2);
+
         let asmjump : *const u32 = vector_table_asm as *const u32;
         vec_table[0] = *asmjump;
         vec_table[1] = *asmjump;

@@ -39,23 +39,23 @@ impl<'a> ::mem::FrameAllocator for LameFrameAllocator<'a> {
         let mut potentialNext;
 
         'outer: loop {
-        cur_free = self.nextfree;
+          cur_free = self.nextfree;
 
-        potentialNext = cur_free + (number << PAGE_SHIFT);
+          potentialNext = cur_free + (number << PAGE_SHIFT);
 
-        let curRange = cur_free .. potentialNext;
+          let curRange = cur_free .. potentialNext;
 
-        for r in self.ranges {
-          if (curRange.start < r.end) && (r.start < curRange.end) {
-            self.nextfree = cmp::max(self.nextfree, r.end);
-            continue 'outer;
+          for r in self.ranges {
+            if (curRange.start < r.end) && (r.start < curRange.end) {
+              self.nextfree = cmp::max(self.nextfree, r.end);
+              continue 'outer;
+            }
           }
+
+            break;
         }
 
-          break;
-        }
-
-        self.nextfree += potentialNext;
+        self.nextfree = potentialNext;
         
         if self.nextfree > self.max {
             return None;
@@ -126,6 +126,9 @@ impl L1TableDescriptor {
   }
 
   fn get_physical_address(&self) -> ::mem::PhysicalAddress {
+    if ! self.is_present() {
+      panic!("entry not present!")
+    }
     ::mem::PhysicalAddress((self.0 as usize)& (!PAGE_MASK))
   }
 }
@@ -152,11 +155,31 @@ impl L2TableDescriptor {
       d
   }
 
+  fn new_device(physical_address_of_page: ::mem::PhysicalAddress) -> L2TableDescriptor {
+    if (physical_address_of_page.0 & PAGE_MASK) != 0 {
+      panic!("Can't map unaligned l2 frames")
+    }
+
+      let mut d : L2TableDescriptor = L2TableDescriptor(0);
+      // 4kb page
+      d.0 |= L2_XPAGE_TYPE;
+      d.0 |= L2_AP_ALL_ACCESS;
+
+      // Only one cpu now.. no need to set shareable
+      // set permissions
+      d.0 |= physical_address_of_page.0 as u32;
+
+      d
+  }
+
   fn is_present(&self) -> bool {
       self.0 != 0
   }
   
   fn get_physical_address(&self) -> ::mem::PhysicalAddress {
+    if ! self.is_present() {
+      panic!("entry not present!")
+    }
     ::mem::PhysicalAddress((self.0 as usize) & (!PAGE_MASK))
   }
 }
@@ -250,7 +273,7 @@ pub struct MemLayout {
 }
 
 
-fn getInitFrames(fa : & mut ::mem::FrameAllocator) -> [::mem::PhysicalAddress;7]{
+fn getInitFrames(fa : & mut ::mem::FrameAllocator) -> [::mem::PhysicalAddress;5]{
   const NUM_FRAMES : usize = 7; // guaranteed to have somthing aligned here..
   let mut freeFrames : [::mem::PhysicalAddress;7] = [::mem::PhysicalAddress(0);NUM_FRAMES];
   let pa = fa.allocate(freeFrames.len()).unwrap();
@@ -263,7 +286,11 @@ fn getInitFrames(fa : & mut ::mem::FrameAllocator) -> [::mem::PhysicalAddress;7]
     freeFrames[i] = pa.offset((shiftedIndex*PAGE_SIZE) as isize);
   }
 
-  return freeFrames
+  // don't need the last two..
+  fa.deallocate(freeFrames[5], 1);
+  fa.deallocate(freeFrames[6], 1);
+
+  return [freeFrames[0],freeFrames[1],freeFrames[2],freeFrames[3],freeFrames[4]]
 }
 
 fn up(a : usize) -> usize {(a + PAGE_MASK) & (!PAGE_MASK)}
@@ -274,7 +301,7 @@ pub fn init_page_table<'a>(l1table_identity : ::mem::VirtualAddress, l2table_ide
         let mut l2 = unsafe{ L2Table::from_virt_address(l2table_identity)};
 
         // get seven frames, where the first four are contingous and aligned to 16kb:
-        let freeFrames : [::mem::PhysicalAddress;7] = getInitFrames(fa);
+        let freeFrames : [::mem::PhysicalAddress;5] = getInitFrames(fa);
 
         // first 4 frames are for l1 table (as they are on 16k boundery).
         // get the 5th frame to use as temporary coarse table
@@ -302,7 +329,7 @@ pub fn init_page_table<'a>(l1table_identity : ::mem::VirtualAddress, l2table_ide
         let mut newl2 = unsafe{ L2Table::from_virt_address(L1_VIRT_ADDRESS.offset(4*PAGE_SIZE as isize))};
 
         // map the new map in itself in the same address.
-        newl1[L1_VIRT_ADDRESS.0 >> MB_SHIFT] =  L1TableDescriptor::new(::mem::PhysicalAddress(l2table_identity.0));
+        newl1[L1_VIRT_ADDRESS.0 >> MB_SHIFT] =  L1TableDescriptor::new(freeFrames[4]);
         newl2[0] = L2TableDescriptor::new(freeFrames[0]);
         newl2[1] = L2TableDescriptor::new(freeFrames[1]);
         newl2[2] = L2TableDescriptor::new(freeFrames[2]);
@@ -417,44 +444,6 @@ pub fn init_page_table<'a>(l1table_identity : ::mem::VirtualAddress, l2table_ide
 
 }
 
-
-fn init() {
-
-
-  // allocate 7 frames. find the one that aligns with 16kb
-  // turn that one to l1 page table
-  // use the current l1 table to map it.
- // in 0xe000_0000
-
-  // get the active page table and,
-  // map the  one of the remaining 3 pages to some address
-  // prepare all the kernel mapping there
-  // and the prepare mapping in l1 address to.
-  // umap.
-  // and on to the next one!
-  // 
-
-//CC  l1Table := getCurrent();
-
-//CCfor pages to map{
-// TODO: make sure frame allocator doesn't allocate the table
-//CC  frame := frameAllocator.alloc(1)
-
-//CC  let l1TableTempMapper = l1TableTempMapper(l1Table, frame, 0xe00000);
-
-  // frame temporary mapped.
-  // use the frame to map the stuff we need
-  // create l2 descriptor 
-  // put it's physical address in our table
-     
-  // umap it!
-  // zbam! 
-
-//CC}
-
-}
-
-
 pub struct PageTable<'a> {
    pub descriptors : L1Table,
    pub frameallocator : &'a mut ::mem::FrameAllocator,
@@ -463,22 +452,36 @@ pub struct PageTable<'a> {
 }
 
 
-impl<'a> ::mem::MemoryMapper for PageTable<'a> {
+impl<'a> PageTable<'a> {
 
-  fn map(&mut self, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress, length : usize) {
+  fn map_single(&mut self, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress) {
+      self.map_single_descriptor(L2TableDescriptor::new(p), v)
+  }
+
+  pub fn map_device(&mut self, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress) {
+      self.map_single_descriptor(L2TableDescriptor::new_device(p), v)
+  }
+
+  // TODO: clear interrupts somewhere here? maybe not
+  fn map_single_descriptor(&mut self, p : L2TableDescriptor, v : ::mem::VirtualAddress) {
     
-    // use index number 5 here to map the relevant stuff
-
-    let numberOfMb = length >> MB_SHIFT;
-    let leftover = length & MB_MASK;
-
     let l1Index = v.0 >> MB_SHIFT;
     // get physical addresss
     // temporary map it to here using the active page table
-    
+    if ! self.descriptors[l1Index].is_present() {
+      let frame = self.frameallocator.allocate(1).unwrap();
+      self.descriptors[l1Index] = L1TableDescriptor::new(frame);
+    }
+
     let l2phy = self.descriptors[l1Index].get_physical_address();
 
-    self.tmpMap[5] = L2TableDescriptor::new(l2phy);
+    // SHOULD WE FLUSH CASHES HERE?
+    
+    // 0-3 are page table itself
+    // 4 is the tmp map itself
+    // 5 is free!
+    const FREE_INDEX : usize = 5;
+    self.tmpMap[FREE_INDEX] = L2TableDescriptor::new(l2phy);
 
     // TODO: find the frame for l2, and temporary map it..
     // and add teh mapping
@@ -486,13 +489,20 @@ impl<'a> ::mem::MemoryMapper for PageTable<'a> {
     cpu::memory_write_barrier();
     cpu::invalidate_caches();
     cpu::invalidate_tlb();
-          
+    cpu::data_synchronization_barrier();
+    
+    let mapped_address = L1_VIRT_ADDRESS.offset((FREE_INDEX*PAGE_SIZE) as isize);
+    // new frame.. zero it
+    for i in (0..PAGE_SIZE).step_by(4) {
+      unsafe{*(mapped_address.offset(i as isize).0 as *mut u32) = 0};
+    }
+
     // frame now available here:
-    let mut l2_for_phy = unsafe{ L2Table::from_virt_address(::mem::VirtualAddress(L1_VIRT_ADDRESS.0 + 5*PAGE_SIZE))};
+    let mut l2_for_phy = unsafe{ L2Table::from_virt_address(mapped_address)};
 
     let l2Index = (v.0 >> PAGE_SHIFT) & 0xFF;
 
-    l2_for_phy[l2Index] = L2TableDescriptor::new(p);
+    l2_for_phy[l2Index] = p;
 
     cpu::memory_write_barrier();
     cpu::invalidate_caches();
@@ -500,11 +510,20 @@ impl<'a> ::mem::MemoryMapper for PageTable<'a> {
     // page should be mapped now
   }
 }
+impl<'a> ::mem::MemoryMapper for PageTable<'a> {
+
+  fn map(&mut self, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress, length : usize) {
+    for i in (0 ..length).step_by(PAGE_SIZE) {
+      self.map_single(p.offset(i as isize), v.offset(i as isize));
+    }
+  }
+
+}
 
 impl L1Table {
 
   unsafe fn from_virt_address(v : ::mem::VirtualAddress) -> L1Table {
-    let slice : &'static mut [L1TableDescriptor] = unsafe{slice::from_raw_parts_mut(v.0 as *mut L1TableDescriptor as *mut L1TableDescriptor, L1TABLE_ENTRIES)};
+    let slice : &'static mut [L1TableDescriptor] = unsafe{slice::from_raw_parts_mut(v.0 as *mut L1TableDescriptor, L1TABLE_ENTRIES)};
     L1Table{
       descriptors : slice
     }

@@ -45,7 +45,7 @@ extern "C" {
     let l2table_unsafe : *const u32 = unsafe{ l2pagetable_glue() as *mut _};
 
     // 1mb aligned stack pointer. 0xD000000 can be more random
-    const STACK_POINTER_BEGIN : usize = 0xD000000;
+    const STACK_POINTER_BEGIN : usize = 0xD000_0000;
     // place the stack physical frame, 1mb aligned and after the page table
     let stack_pointer_phy : usize = ((l1table_unsafe as usize) +  (4*mem::L1TABLE_ENTRIES)  + 2*(1 << 20)) & MB_MASK;
     const STACK_POINTER_END : usize = STACK_POINTER_BEGIN +  (1 << 20);

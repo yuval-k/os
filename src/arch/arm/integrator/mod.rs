@@ -6,7 +6,6 @@ use super::mem;
 fn up(a : usize) -> usize {(a + mem::PAGE_MASK) & (!mem::PAGE_MASK)}
 fn down(a : usize) -> usize {(a ) & (!mem::PAGE_MASK)}
 
-
 #[no_mangle]
 pub extern "C" fn integrator_main(
     sp_end_virt : usize, sp_end_phy : usize, 
@@ -24,7 +23,12 @@ pub extern "C" fn integrator_main(
     let skipRanges = [down(kernel_start_virt)..up(kernel_end_virt), down(ml.stack_virt.0) .. up(sp_end_virt), down(l1table_id) .. up(l2table_space_id + 4*mem::L2TABLE_ENTRIES) ];
     let mut frameAllocator = mem::LameFrameAllocator::new(&skipRanges, 1<<27);
 
-    let pageTable = mem::init_page_table(::mem::VirtualAddress(l1table_id), ::mem::VirtualAddress(l2table_space_id), &ml , &mut frameAllocator); 
+    let mut pageTable = mem::init_page_table(::mem::VirtualAddress(l1table_id), ::mem::VirtualAddress(l2table_space_id), &ml , &mut frameAllocator);
+
+    pageTable.map_device(serial::SERIAL_BASE_PADDR, serial::SERIAL_BASE_VADDR);
+
+    // print to serial should work now!
+    
     // now we can create a normal page table!
     // map the vectors, stack and kernel as normal memory and then map the devices as device memory
 /*
@@ -38,11 +42,8 @@ pub extern "C" fn integrator_main(
     memoryProtection.setRegion(kernel_start_virt, kernel_start_virt+WHATEVER, NORMAL)
     memoryProtection.map( mmio, whatever, PAGE_SIZE, DEVICE)
 */
-    for i in 1..10 {
-        
-    }
 
-    ::arch::arm::arm_main(0,0,0);
+    ::arch::arm::arm_main(&mut pageTable);
 
     loop {}
 }
