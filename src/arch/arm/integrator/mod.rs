@@ -37,7 +37,7 @@ pub extern "C" fn integrator_main(
     let mut w = &mut serial::Writer::new();
     w.writeln("Welcome home!");
 
-    ::arch::arm::arm_main(&mut pageTable, &mut frameAllocator);
+    ::arch::arm::arm_main(&mut pageTable, frameAllocator);
 
     loop {}
 }

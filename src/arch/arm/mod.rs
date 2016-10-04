@@ -3,14 +3,25 @@ pub mod vector;
 pub mod mem;
 pub mod cpu;
 
+fn build_mode_stacks<T : ::mem::FrameAllocator>(mapper : &mut ::mem::MemoryMapper, mut frameAllocator : &mut T) {
+
+    const stacks_base : ::mem::VirtualAddress = ::mem::VirtualAddress(0xb000_0000);
+    // allocate 2 pages
+    let pa = frameAllocator.allocate(2).unwrap();
+
+    // 1k per stack; so need 5*1kb memory = two pages
+    mapper.map(frameAllocator, pa, stacks_base, 2*mem::PAGE_SIZE);
+    
+    cpu::set_stack_for_modes(stacks_base);
+}
 
 #[no_mangle]
-pub extern "C" fn arm_main(mapper : &mut ::mem::MemoryMapper, frameAllocator : & mut ::mem::FrameAllocator) -> !{
+pub extern "C" fn arm_main<T : ::mem::FrameAllocator>(mapper : &mut ::mem::MemoryMapper, mut frameAllocator : T) -> !{
 
+    build_mode_stacks(mapper, &mut frameAllocator);
     // map vector tables
-    mapper.map(frameAllocator, ::mem::PhysicalAddress(0), vector::VECTORS_ADDR, 1);
+    mapper.map(&mut frameAllocator, ::mem::PhysicalAddress(0), vector::VECTORS_ADDR, 1);
     vector::build_vector_table();
-  // TODO build_mode_stacks();
   // TODO install_interrupt_handlers();
   // TODO init_heap();
 

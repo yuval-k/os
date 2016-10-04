@@ -137,8 +137,8 @@ extern "C" {
             "i"(::arch::arm::integrator::integrator_main as extern "C" fn(_,_,_,_,_,_,_) -> !),
             "r"(STACK_POINTER_END),
             "r"(stack_pointer_end_phy),
-            "r"(kernel_start_phy) ,
-            "r"(kernel_start_virt) ,
+            "r"(kernel_start_phy),
+            "r"(kernel_start_virt),
             "r"(l2table_unsafe),
             "r"(l1table_unsafe),
             "r"(kernel_end_virt)
