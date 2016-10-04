@@ -1,4 +1,5 @@
 use core::ops::Sub;
+use core::cmp;
 
 #[derive(Copy, Clone)]
 pub struct VirtualAddress(pub usize);
@@ -9,11 +10,38 @@ impl VirtualAddress {
     pub fn offset(&self, off : isize) -> VirtualAddress {
         VirtualAddress((self.0 as isize + off) as usize)
     }
+
+    pub fn uoffset(&self, off : usize) -> VirtualAddress {
+        VirtualAddress(self.0 + off)
+    }
+}
+
+impl cmp::PartialOrd for PhysicalAddress {
+    fn partial_cmp(&self, other: &PhysicalAddress) -> Option<cmp::Ordering> {
+                Some(self.cmp(other))
+    }
+}
+
+impl cmp::PartialEq for PhysicalAddress {
+    fn eq(&self, other: &PhysicalAddress) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl cmp::Eq for PhysicalAddress {}
+
+impl cmp::Ord for PhysicalAddress {
+    fn cmp(&self, other: &PhysicalAddress) -> cmp::Ordering {
+        self.0.cmp(&other.0)
+    }
 }
 
 impl PhysicalAddress {
     pub fn offset(&self, off : isize) -> PhysicalAddress {
         PhysicalAddress((self.0 as isize + off) as usize)
+    }
+    pub fn uoffset(&self, off : usize) -> PhysicalAddress {
+        PhysicalAddress(self.0 + off)
     }
 }
 

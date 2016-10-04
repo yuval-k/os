@@ -1,11 +1,12 @@
 pub mod serial;
 pub mod stub;
 
+use core::ops;
 use super::mem;
 use device::serial::SerialMMIO;
 
-fn up(a : usize) -> usize {(a + mem::PAGE_MASK) & (!mem::PAGE_MASK)}
-fn down(a : usize) -> usize {(a ) & (!mem::PAGE_MASK)}
+fn up(a : usize) -> ::mem::PhysicalAddress {::mem::PhysicalAddress((a + mem::PAGE_MASK) & (!mem::PAGE_MASK))}
+fn down(a : usize) -> ::mem::PhysicalAddress { ::mem::PhysicalAddress((a ) & (!mem::PAGE_MASK))}
 
 #[no_mangle]
 pub extern "C" fn integrator_main(
@@ -22,7 +23,10 @@ pub extern "C" fn integrator_main(
         };
 
     let skipRanges = [down(kernel_start_virt)..up(kernel_end_virt), down(ml.stack_virt.0) .. up(sp_end_virt), down(l1table_id) .. up(l2table_space_id + 4*mem::L2TABLE_ENTRIES) ];
-    let mut frameAllocator = mem::LameFrameAllocator::new(&skipRanges, 1<<27);
+    // can't use short syntax: https://github.com/rust-lang/rust/pull/21846#issuecomment-110526401
+    let mut freedRanges : [Option<ops::Range<::mem::PhysicalAddress>>;10] = [None,None,None,None,None,None,None,None,None,None];
+    
+    let mut frameAllocator = mem::LameFrameAllocator::new(&skipRanges, &mut freedRanges, 1<<27);
 
     let mut pageTable = mem::init_page_table(::mem::VirtualAddress(l1table_id), ::mem::VirtualAddress(l2table_space_id), &ml , &mut frameAllocator);
 

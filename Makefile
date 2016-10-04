@@ -22,10 +22,10 @@ toolchain:
 	rustup target add $(TARGET)
 	
 emulate: target/kernel.img
-	qemu-system-arm -machine integratorcp -cpu arm1136 -m 128 -kernel target/kernel.img -serial stdio
+	qemu-system-arm -machine integratorcp -cpu arm1176 -m 128 -kernel target/kernel.img -serial stdio
 
 emulate-debug: target/kernel.img
-	qemu-system-arm -machine integratorcp -cpu arm1136 -m 128 -kernel target/kernel.img -serial stdio -s -S
+	qemu-system-arm -machine integratorcp -cpu arm1176 -m 128 -kernel target/kernel.img -serial stdio -s -S
 
 $(os_lib): cargo
 

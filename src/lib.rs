@@ -3,7 +3,6 @@
 #![feature(asm)]
 #![feature(naked_functions)] 
 #![feature(core_intrinsics)]
-#![feature(range_contains)]
 #![feature(step_by)]
 
 extern crate rlibc;

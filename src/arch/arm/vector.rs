@@ -59,11 +59,7 @@ pub fn build_vector_table() {
         vec_table[8+5] = 0;
         vec_table[8+6] = vector_irq as u32;
         vec_table[8+7] = vector_fiq as u32;
-
     }
-
-// 
-
 }
 
 extern "C" fn vector_reset() {

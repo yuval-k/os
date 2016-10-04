@@ -21,11 +21,12 @@ pub const MB_MASK : usize = MB_SIZE - 1;
 
 pub struct LameFrameAllocator<'a> {
 
-    nextfree : usize,
-    max : usize,
+    nextfree : ::mem::PhysicalAddress,
+    max : ::mem::PhysicalAddress,
 
-    ranges : &'a [ops::Range<usize>]
-    // TODO: add deallocated list
+    ranges : &'a [ops::Range<::mem::PhysicalAddress>],
+    free_frames : &'a mut [Option<ops::Range<::mem::PhysicalAddress>>],
+    free_frames_index : usize,
 }
 
 impl<'a> ::mem::FrameAllocator for LameFrameAllocator<'a> {
@@ -41,7 +42,7 @@ impl<'a> ::mem::FrameAllocator for LameFrameAllocator<'a> {
         'outer: loop {
           cur_free = self.nextfree;
 
-          potentialNext = cur_free + (number << PAGE_SHIFT);
+          potentialNext = cur_free.offset((number << PAGE_SHIFT) as isize);
 
           let curRange = cur_free .. potentialNext;
 
@@ -62,20 +63,25 @@ impl<'a> ::mem::FrameAllocator for LameFrameAllocator<'a> {
         }
 
 
-        Some(::mem::PhysicalAddress(cur_free))
+        Some(cur_free)
     }
 
-    fn deallocate(&mut self, _ : ::mem::PhysicalAddress, _ : usize) {
-        // make a short dealloc list
+    fn deallocate(&mut self, addr : ::mem::PhysicalAddress, size : usize) {
+        if (self.free_frames_index + 1) < self.free_frames.len() {
+          self.free_frames[self.free_frames_index] = Some(addr .. addr.uoffset(size << PAGE_SHIFT));
+          self.free_frames_index += 1;
+        }
     }
 
 }
 impl<'a>  LameFrameAllocator<'a> {
-    pub fn new(ranges : &'a [ops::Range<usize>], max_size : usize) -> LameFrameAllocator<'a> {
+    pub fn new(ranges : &'a [ops::Range<::mem::PhysicalAddress>], free_frames : &'a mut [Option<ops::Range<::mem::PhysicalAddress>>], max_size : usize) -> LameFrameAllocator<'a> {
         LameFrameAllocator{
-            max : max_size,
-            nextfree: PAGE_SIZE, // don't allocate frame zero cause the vector table is there..
+            max : ::mem::PhysicalAddress(max_size),
+            nextfree: ::mem::PhysicalAddress(PAGE_SIZE), // don't allocate frame zero cause the vector table is there..
             ranges : ranges,
+            free_frames : free_frames,
+            free_frames_index: 0,
         }
     }
 
@@ -283,7 +289,7 @@ fn getInitFrames(fa : & mut ::mem::FrameAllocator) -> [::mem::PhysicalAddress;5]
 
   for i in 0 .. NUM_FRAMES {
     let shiftedIndex = (i + l1StartFrame) % NUM_FRAMES;
-    freeFrames[i] = pa.offset((shiftedIndex*PAGE_SIZE) as isize);
+    freeFrames[i] = pa.offset((shiftedIndex << PAGE_SHIFT) as isize);
   }
 
   // don't need the last two..
@@ -326,7 +332,7 @@ pub fn init_page_table<'a>(l1table_identity : ::mem::VirtualAddress, l2table_ide
 
         // our blank l1 and l2 mapped pages should be available now.
         let mut newl1 = unsafe{ L1Table::from_virt_address(L1_VIRT_ADDRESS)};
-        let mut newl2 = unsafe{ L2Table::from_virt_address(L1_VIRT_ADDRESS.offset(4*PAGE_SIZE as isize))};
+        let mut newl2 = unsafe{ L2Table::from_virt_address(L1_VIRT_ADDRESS.offset((4 << PAGE_SHIFT) as isize))};
 
         // map the new map in itself in the same address.
         newl1[L1_VIRT_ADDRESS.0 >> MB_SHIFT] =  L1TableDescriptor::new(freeFrames[4]);
@@ -365,13 +371,13 @@ pub fn init_page_table<'a>(l1table_identity : ::mem::VirtualAddress, l2table_ide
           cpu::invalidate_tlb();
           
           // frame now available here:
-          let frameAddress = ::mem::VirtualAddress(L1_VIRT_ADDRESS.0 + nextFreeL2Index*PAGE_SIZE);
+          let frameAddress = L1_VIRT_ADDRESS.uoffset(nextFreeL2Index << PAGE_SHIFT);
           let mut currKernelL2 = unsafe{L2Table::from_virt_address(frameAddress)};
           // for each 4k block in the mb, map it in newframel2
-          let curphy_start = ml.kernel_start_phy.offset((i << MB_SHIFT) as isize);
+          let curphy_start = ml.kernel_start_phy.uoffset(i << MB_SHIFT);
           // check that in the end we don't map a full MB
-          let nextmb =  ml.kernel_start_phy.offset(((i+1) << MB_SHIFT) as isize);
-          let curphy_end = if (i+1) == nummb {ml.kernel_start_phy.offset(kernelSize as isize)} else{nextmb};
+          let nextmb =  ml.kernel_start_phy.uoffset((i+1) << MB_SHIFT);
+          let curphy_end = if (i+1) == nummb {ml.kernel_start_phy.uoffset(kernelSize)} else{nextmb};
 
           let mut l2loopindex = 0;
           for curFrame in  (curphy_start.0 .. curphy_end.0).step_by(PAGE_SIZE) {
@@ -412,7 +418,7 @@ pub fn init_page_table<'a>(l1table_identity : ::mem::VirtualAddress, l2table_ide
         cpu::invalidate_caches();
         cpu::invalidate_tlb();
 
-        let frameAddress = ::mem::VirtualAddress(L1_VIRT_ADDRESS.0 + nextFreeL2Index*PAGE_SIZE);
+        let frameAddress = L1_VIRT_ADDRESS.uoffset(nextFreeL2Index << PAGE_SHIFT);
         let mut stackL2 = unsafe{L2Table::from_virt_address(frameAddress)};
         // TODO: set nx bit
         stackL2[(sp >>PAGE_SHIFT) & 0xFF] = L2TableDescriptor::new(::mem::PhysicalAddress(spframe));
@@ -494,7 +500,7 @@ impl<'a> PageTable<'a> {
     let mapped_address = L1_VIRT_ADDRESS.offset((FREE_INDEX*PAGE_SIZE) as isize);
     // new frame.. zero it
     for i in (0..PAGE_SIZE).step_by(4) {
-      unsafe{*(mapped_address.offset(i as isize).0 as *mut u32) = 0};
+      unsafe{*(mapped_address.uoffset(i).0 as *mut u32) = 0};
     }
 
     // frame now available here:
