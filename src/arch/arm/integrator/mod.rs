@@ -2,6 +2,7 @@ pub mod serial;
 pub mod stub;
 
 use super::mem;
+use device::serial::SerialMMIO;
 
 fn up(a : usize) -> usize {(a + mem::PAGE_MASK) & (!mem::PAGE_MASK)}
 fn down(a : usize) -> usize {(a ) & (!mem::PAGE_MASK)}
@@ -28,20 +29,9 @@ pub extern "C" fn integrator_main(
     pageTable.map_device(serial::SERIAL_BASE_PADDR, serial::SERIAL_BASE_VADDR);
 
     // print to serial should work now!
-    
-    // now we can create a normal page table!
-    // map the vectors, stack and kernel as normal memory and then map the devices as device memory
-/*
-    let pagetable : pagetable;
 
-    pagetable.map(kernel_start_phy, kernel_start_virt, kernel_end_virt-kernel_start_virt)
-    pagetable.map(0, 0x..., PAGE_SIZE)
-    pagetable.map( get_phys_stack, getsp(), PAGE_SIZE, NORMAL)
-    pagetable.map( mmio, ?, PAGE_SIZE)
-
-    memoryProtection.setRegion(kernel_start_virt, kernel_start_virt+WHATEVER, NORMAL)
-    memoryProtection.map( mmio, whatever, PAGE_SIZE, DEVICE)
-*/
+    let mut w = &mut serial::Writer::new();
+    w.write_byte('Y' as u8);
 
     ::arch::arm::arm_main(&mut pageTable);
 
