@@ -6,6 +6,7 @@ use super::cpu;
 // pub const VECTORS_ADDR : ::mem::VirtualAddress  = ::mem::VirtualAddress(0xea00_0000);
 pub const VECTORS_ADDR : ::mem::VirtualAddress  = ::mem::VirtualAddress(0x0);
 
+// NOTE: DO NOT change struct without changing the inline assembly in vector_entry
 #[repr(C, packed)]
 struct InterruptContext{
     cspr: u32,
@@ -43,7 +44,6 @@ pub struct Context {
     lr: u32,
     pc: u32,
     cspr: u32,
-    // TODO add r13 and r14  (need to switch mode for that..)
 }
 
 macro_rules! inthandler {

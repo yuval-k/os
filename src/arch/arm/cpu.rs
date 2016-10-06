@@ -156,6 +156,7 @@ const DISABLE_IRQ : u32 = 1 << 7;
 pub fn set_stack_for_modes(stack_base : ::mem::VirtualAddress) {
     unsafe {
       asm!("mov r0, $0
+            add r0,r0, #0x1000
             mrs r1, cpsr
             bic r1, r1, $1
 	          orr r1, r1, $2   /* FIQ */
@@ -268,11 +269,16 @@ pub fn set_spsr(spsr : u32) {
   }
 }
 
-pub fn get_r13r14(mode : u32) -> (u32, u32){
+pub fn get_r13r14(spsr : u32) -> (u32, u32){
   let cpsr = get_cpsr();
   // get the mode
   let frommode = cpsr & MODE_MASK;
-  let mut tomode  = mode; // not needed..get_spsr() & MODE_MASK;
+  let mut tomode  = MODE_MASK & spsr; // not needed..get_spsr() & MODE_MASK;
+
+  if frommode == tomode {
+    panic!("This should only be used to get regs from different mode.")
+  }
+
 
   // if to mode is user mode, change to system mode
   if tomode == USER_MODE {
@@ -292,8 +298,8 @@ pub fn get_r13r14(mode : u32) -> (u32, u32){
         mov r3, sp
         mov r4, lr
         msr cpsr, r1
-        mov r3, $0
-        mov r4, $1
+        mov $0, r3
+        mov $1, r4
         "
           : "=r"(r13), "=r"(r14): "r"(tocpsr) , "r"(cpsr) : "r0", "r1","r3", "r4": "volatile"
           );
@@ -302,16 +308,16 @@ pub fn get_r13r14(mode : u32) -> (u32, u32){
   return (r13, r14)
 }
 
-pub fn set_r13r14(mode : u32, r13: u32, r14 : u32){
+pub fn set_r13r14(spsr : u32, r13: u32, r14 : u32){
   let cpsr = get_cpsr();
   // get the mode
   let frommode = cpsr & MODE_MASK;
-  let mut tomode  = mode; 
+  let mut tomode  = MODE_MASK & spsr; 
 
   // if to mode is user mode, change to system mode
   if tomode == USER_MODE {
     tomode = SYS_MODE;
-  }  
+  }
   
   let tocpsr = (cpsr &  !(MODE_MASK)) | tomode;
 
