@@ -312,17 +312,18 @@ pub fn set_r13r14(spsr : u32, r13: u32, r14 : u32){
   let cpsr = get_cpsr();
   // get the mode
   let frommode = cpsr & MODE_MASK;
-  let mut tomode  = MODE_MASK & spsr; 
+  let mut tomode  = MODE_MASK & spsr;
+
+  if frommode == tomode {
+    panic!("This should only be used to get regs from different mode.")
+  }
 
   // if to mode is user mode, change to system mode
   if tomode == USER_MODE {
     tomode = SYS_MODE;
-  }
+  }  
   
   let tocpsr = (cpsr &  !(MODE_MASK)) | tomode;
-
-  let mut r13 : u32 = 0;
-  let mut r14 : u32 = 0;
 
   unsafe{
     asm!("
