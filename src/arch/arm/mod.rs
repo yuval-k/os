@@ -24,6 +24,8 @@ pub extern "C" fn arm_main<T : ::mem::FrameAllocator>(mapper : &mut ::mem::Memor
     vector::build_vector_table();
   // TODO install_interrupt_handlers();
   // TODO init_heap();
+  // TODO init_scheduler();
+  // TODO create semaphore
 
 /*
     TODO: to support user space, we can use the MPU:
@@ -31,6 +33,9 @@ pub extern "C" fn arm_main<T : ::mem::FrameAllocator>(mapper : &mut ::mem::Memor
     memoryProtection.map( mmio, whatever, PAGE_SIZE, DEVICE)
 */
 
+    unsafe{asm!("swi 0"
+          :: :: "volatile"
+          );}
     ::rust_main();
 
     loop {}

@@ -182,7 +182,7 @@ pub fn set_stack_for_modes(stack_base : ::mem::VirtualAddress) {
             
             add r0,r0, #0x1000
             bic r1, r1, $1
-	          orr r1, r1, $6  /* SYS */
+	          orr r1, r1, $6  /* SYS \\ USER */
             msr cpsr_c, r1
             mov sp, r0
             
@@ -230,4 +230,106 @@ pub fn enable_interrupts() {
             : "r0", "cpsr" : "volatile"
       )
     }
+}
+
+pub fn get_cpsr() -> u32{
+  let mut cpsr : u32;
+  unsafe{
+    asm!("mrs $0, cpsr"
+          : "=r"(cpsr) 
+          );
+  }
+  return cpsr;
+}
+
+pub fn set_cpsr(cpsr : u32) {
+  unsafe{
+    asm!("msr cpsr, $0"
+          :: "r"(cpsr) :: "volatile"
+          );
+  }
+}
+
+pub fn get_spsr() -> u32{
+  let mut spsr : u32;
+  unsafe{
+    asm!("mrs $0, spsr"
+          : "=r"(spsr) 
+          );
+  }
+  return spsr;
+}
+
+pub fn set_spsr(spsr : u32) {
+  unsafe{
+    asm!("msr spsr, $0"
+          :: "r"(spsr) :: "volatile"
+          );
+  }
+}
+
+pub fn get_r13r14(mode : u32) -> (u32, u32){
+  let cpsr = get_cpsr();
+  // get the mode
+  let frommode = cpsr & MODE_MASK;
+  let mut tomode  = mode; // not needed..get_spsr() & MODE_MASK;
+
+  // if to mode is user mode, change to system mode
+  if tomode == USER_MODE {
+    tomode = SYS_MODE;
+  }  
+  
+  let tocpsr = (cpsr &  !(MODE_MASK)) | tomode;
+
+  let mut r13 : u32;
+  let mut r14 : u32;
+
+  unsafe{
+    asm!("
+        mov r0, $2
+        mov r1, $3
+        msr cpsr, r0
+        mov r3, sp
+        mov r4, lr
+        msr cpsr, r1
+        mov r3, $0
+        mov r4, $1
+        "
+          : "=r"(r13), "=r"(r14): "r"(tocpsr) , "r"(cpsr) : "r0", "r1","r3", "r4": "volatile"
+          );
+  }
+  
+  return (r13, r14)
+}
+
+pub fn set_r13r14(mode : u32, r13: u32, r14 : u32){
+  let cpsr = get_cpsr();
+  // get the mode
+  let frommode = cpsr & MODE_MASK;
+  let mut tomode  = mode; 
+
+  // if to mode is user mode, change to system mode
+  if tomode == USER_MODE {
+    tomode = SYS_MODE;
+  }  
+  
+  let tocpsr = (cpsr &  !(MODE_MASK)) | tomode;
+
+  let mut r13 : u32 = 0;
+  let mut r14 : u32 = 0;
+
+  unsafe{
+    asm!("
+        mov r3, $0
+        mov r4, $1
+        mov r0, $2
+        mov r1, $3
+        msr cpsr, r0
+        mov sp, r3
+        mov lr, r4
+        msr cpsr, r1
+        "
+          :: "r"(r13), "r"(r14), "r"(tocpsr) , "r"(cpsr) : "r0", "r1","r3", "r4": "volatile"
+          );
+  }
 }
