@@ -6,6 +6,7 @@
 #![feature(step_by)]
 
 extern crate rlibc;
+extern crate kernel_alloc;
 
 #[macro_use]
 extern crate bitflags;

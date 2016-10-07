@@ -7,6 +7,9 @@ authors = ["Kohavi, Yuval <yuval.kohavi@gmail.com>"]
 rlibc = "1.0.0"
 bitflags = "0.7.0"
 
+[dependencies.kernel_alloc]
+path = "lib/kernel_alloc"
+
 [profile.dev]
 panic = "abort"
 

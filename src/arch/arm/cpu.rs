@@ -233,6 +233,19 @@ pub fn enable_interrupts() {
     }
 }
 
+pub fn set_interrupts(b : bool) {
+    if b {
+      enable_interrupts();
+    } else {
+      disable_interrupts();
+    }
+}
+
+pub fn get_interrupts() -> bool {
+    (get_cpsr() & (DISABLE_IRQ | DISABLE_IRQ)) == 0
+}
+
+
 pub fn get_cpsr() -> u32{
   let mut cpsr : u32;
   unsafe{
