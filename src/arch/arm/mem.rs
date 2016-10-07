@@ -36,6 +36,21 @@ impl<'a> ::mem::FrameAllocator for LameFrameAllocator<'a> {
             return None;
         }
 
+/*
+        if (number == 1) && self.free_frames_index > 0 {
+          self.free_frames_index -= 1;
+          if let Some(frameRange) =  self.free_frames[self.free_frames_index] {
+
+            // TODO if range is bigger than one page take just one page.
+          if frameRange.
+
+            self.free_frames[self.free_frames_index] = None;
+            return  Some(frame);
+          } else {
+            panic!("Frame not there even though it should");
+          }
+        }
+*/
         let mut cur_free;
         let mut potentialNext;
 
@@ -467,11 +482,13 @@ impl PageTable {
   fn map_single_descriptor(&mut self, frameallocator : & mut ::mem::FrameAllocator, p : L2TableDescriptor, v : ::mem::VirtualAddress) {
     
     let l1Index = v.0 >> MB_SHIFT;
+    let mut newFrame : bool = false;
     // get physical addresss
     // temporary map it to here using the active page table
     if ! self.descriptors[l1Index].is_present() {
       let frame = frameallocator.allocate(1).unwrap();
       self.descriptors[l1Index] = L1TableDescriptor::new(frame);
+      newFrame = true;
     }
 
     let l2phy = self.descriptors[l1Index].get_physical_address();
@@ -494,8 +511,10 @@ impl PageTable {
     
     let mapped_address = L1_VIRT_ADDRESS.offset((FREE_INDEX*PAGE_SIZE) as isize);
     // new frame.. zero it
-    for i in (0..PAGE_SIZE).step_by(4) {
-      unsafe{*(mapped_address.uoffset(i).0 as *mut u32) = 0};
+    if newFrame {
+      for i in (0..PAGE_SIZE).step_by(4) {
+        unsafe{*(mapped_address.uoffset(i).0 as *mut u32) = 0};
+      }
     }
 
     // frame now available here:

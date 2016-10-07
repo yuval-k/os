@@ -7,6 +7,9 @@
 
 extern crate rlibc;
 
+#[macro_use]
+extern crate bitflags;
+
 pub mod device;
 pub mod arch;
 pub mod mem;

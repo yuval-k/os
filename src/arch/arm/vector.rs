@@ -193,6 +193,27 @@ pub fn build_vector_table() {
     }
 }
 
+// TODO: sync access to this or even better, to it lock free :)
+static mut vecTable : VectorTable = VectorTable{
+    irq_callbacks : [None;10],
+    index : 0,
+};
+
+// TODO: make thread safe !!
+pub fn get_vec_table() -> &'static mut VectorTable { unsafe { &mut vecTable } }
+
+pub struct VectorTable {
+    // TODO re-write when we have a heap
+    irq_callbacks : [Option<fn(ctx : & Context) -> Option<Context> >;10],
+    index : usize,
+}
+
+impl VectorTable {
+    pub fn register_irq(&mut self, callback : fn(ctx : & Context) -> Option<Context>) {
+        self.irq_callbacks[self.index] = Some(callback);
+        self.index += 1;
+    }
+}
 
 fn vector_reset_handler(ctx : & Context) -> Option<Context> {
 
@@ -223,7 +244,20 @@ fn vector_data_abort_handler(ctx : & Context) -> Option<Context> {
 }
 
 fn vector_irq_handler(ctx : & Context) -> Option<Context> {
-    loop{};
+    unsafe {
+        for i in 0..vecTable.index {
+            if let Some(func) = vecTable.irq_callbacks[i] {
+                let ret = func(ctx);
+                match ret {
+                    Some(_) => {
+                        return ret;
+                    },
+                    _ => {},
+                }
+            }
+        }
+    }
+
     None
 }
 

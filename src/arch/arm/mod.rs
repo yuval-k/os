@@ -3,29 +3,14 @@ pub mod vector;
 pub mod mem;
 pub mod cpu;
 
-fn build_mode_stacks<T : ::mem::FrameAllocator>(mapper : &mut ::mem::MemoryMapper, mut frameAllocator : &mut T) {
-
-    const stacks_base : ::mem::VirtualAddress = ::mem::VirtualAddress(0xb000_0000);
-    // allocate 5 pages
-    let pa = frameAllocator.allocate(5).unwrap();
-
-    // 4k per stack; so need 5*4kb memory = five pages
-    mapper.map(frameAllocator, pa, stacks_base, 5*mem::PAGE_SIZE);
-    
-    cpu::set_stack_for_modes(stacks_base);
-}
-
 #[no_mangle]
 pub extern "C" fn arm_main<T : ::mem::FrameAllocator>(mapper : &mut ::mem::MemoryMapper, mut frameAllocator : T) -> !{
 
-    build_mode_stacks(mapper, &mut frameAllocator);
-    // map vector tables
-    mapper.map(&mut frameAllocator, ::mem::PhysicalAddress(0), vector::VECTORS_ADDR, 1);
-    vector::build_vector_table();
-  // TODO install_interrupt_handlers();
-  // TODO init_heap();
-  // TODO init_scheduler();
+  // DONE. install_interrupt_handlers();
+  // TODO: init_timer
+  // TODO init_scheduler() + threads;
   // TODO create semaphore
+  // TODO init_heap()
 
 /*
     TODO: to support user space, we can use the MPU:
@@ -33,9 +18,7 @@ pub extern "C" fn arm_main<T : ::mem::FrameAllocator>(mapper : &mut ::mem::Memor
     memoryProtection.map( mmio, whatever, PAGE_SIZE, DEVICE)
 */
     // undefined instruction to test
-    unsafe{asm!(".word 0xffffffff"
-          :: :: "volatile"
-          );}
+ //   unsafe{asm!(".word 0xffffffff" :: :: "volatile");}
     ::rust_main();
 
     loop {}

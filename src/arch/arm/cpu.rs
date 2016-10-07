@@ -308,7 +308,7 @@ pub fn get_r13r14(spsr : u32) -> (u32, u32){
   return (r13, r14)
 }
 
-pub fn set_r13r14(spsr : u32, r13: u32, r14 : u32){
+pub fn set_r13r14(spsr : u32, r13: u32, r14 : u32) {
   let cpsr = get_cpsr();
   // get the mode
   let frommode = cpsr & MODE_MASK;
@@ -325,7 +325,7 @@ pub fn set_r13r14(spsr : u32, r13: u32, r14 : u32){
   
   let tocpsr = (cpsr &  !(MODE_MASK)) | tomode;
 
-  unsafe{
+  unsafe {
     asm!("
         mov r3, $0
         mov r4, $1
