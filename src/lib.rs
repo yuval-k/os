@@ -5,6 +5,11 @@
 #![feature(core_intrinsics)]
 #![feature(step_by)]
 
+#![feature(alloc, collections)]
+
+#[macro_use]
+extern crate collections;
+
 extern crate rlibc;
 extern crate kernel_alloc;
 

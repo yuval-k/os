@@ -3,7 +3,7 @@
 #![allocator]
 #![no_std]
 
-#![feature(const_fn)]
+
 
 extern crate spin;
 extern crate linked_list_allocator;
@@ -37,19 +37,8 @@ unsafe impl<T: ?Sized + Send> Send for InterruptGuard<T> {}
 
 impl<T> InterruptGuard<T>
 {
-    #[cfg(feature = "const_fn")]
-    pub const fn new(user_data: T,  get_int : fn() -> bool, set_int : fn(bool) ) -> InterruptGuard<T>
-    {
-        InterruptGuard
-        {
-            get_int : get_int,
-            set_int : set_int,
-            data: UnsafeCell::new(user_data),
-        }
-    }
 
-    #[cfg(not(feature = "const_fn"))]
-    pub const fn new<'a>(user_data: T,  get_int : fn() -> bool, set_int : fn(bool) ) -> InterruptGuard<T>
+    pub fn new<'a>(user_data: T,  get_int : fn() -> bool, set_int : fn(bool) ) -> InterruptGuard<T>
     {
         InterruptGuard
         {

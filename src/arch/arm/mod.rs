@@ -4,19 +4,29 @@ pub mod mem;
 pub mod cpu;
 
 use kernel_alloc;
+use device::serial::SerialMMIO;
 
 #[no_mangle]
 pub extern "C" fn arm_main<T : ::mem::FrameAllocator>(mapper : &mut ::mem::MemoryMapper, mut frameAllocator : T) -> !{
 
     const heap_base : ::mem::VirtualAddress = ::mem::VirtualAddress(0xf000_0000);
-    // allocate 5 pages
-    let pa = frameAllocator.allocate(1<<22).unwrap();
+    const heap_size :usize = 1 << 22; // 4mb heap
+    let pa = frameAllocator.allocate(heap_size >> mem::PAGE_SHIFT).unwrap();
+    mapper.map(&mut frameAllocator, pa, heap_base, heap_size);
+    kernel_alloc::init_heap(heap_base.0, heap_size, cpu::get_interrupts, cpu::set_interrupts);
 
-    // 4k per stack; so need 5*4kb memory = five pages
-    mapper.map(&mut frameAllocator, pa, heap_base, (1<<22)*mem::PAGE_SIZE);
+    // heap should work now!
+
+    let v = vec!["!","2","1","3"];
+
+    // TODO: better abstraction for drivers..
+    let mut w = &mut ::arch::arm::integrator::serial::Writer::new();
 
 
-    kernel_alloc::init_heap(heap_base.0, (1<<22)*mem::PAGE_SIZE, cpu::get_interrupts, cpu::set_interrupts);
+    for i in v {
+            w.writeln(i);
+    }
+
   // DONE. install_interrupt_handlers();
   // TODO: init_timer
   // TODO init_heap()
