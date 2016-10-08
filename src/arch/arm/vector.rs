@@ -8,8 +8,9 @@ pub const VECTORS_ADDR : ::mem::VirtualAddress  = ::mem::VirtualAddress(0x0);
 
 // NOTE: DO NOT change struct without changing the inline assembly in vector_entry
 #[repr(C, packed)]
+#[derive(Copy, Clone)]
 struct InterruptContext{
-    cspr: u32,
+    cpsr: u32,
     r0: u32,
     r1: u32,
     r2: u32,
@@ -26,31 +27,34 @@ struct InterruptContext{
     pc: u32,
 }
 
+// NOTE: DO NOT change struct without changing the inline assembly in switchContext
+#[repr(C, packed)]
+#[derive(Copy, Clone)]
 pub struct Context {
-    r0: u32,
-    r1: u32,
-    r2: u32,
-    r3: u32,
-    r4: u32,
-    r5: u32,
-    r6: u32,
-    r7: u32,
-    r8: u32,
-    r9: u32,
-    r10: u32,
-    r11: u32,
-    r12: u32,
-    sp: u32,
-    lr: u32,
-    pc: u32,
-    cspr: u32,
+    pub r0: u32,
+    pub r1: u32,
+    pub r2: u32,
+    pub r3: u32,
+    pub r4: u32,
+    pub r5: u32,
+    pub r6: u32,
+    pub r7: u32,
+    pub r8: u32,
+    pub r9: u32,
+    pub r10: u32,
+    pub r11: u32,
+    pub r12: u32,
+    pub sp: u32,
+    pub pc: u32,
+    pub lr: u32,
+    pub cpsr: u32,
 }
 
 macro_rules! inthandler {
     ( $handler:ident ) => {{ 
 
 extern "C" fn vector_with_context(ctx : &mut InterruptContext) {
-    let (r13, r14) = cpu::get_r13r14(ctx.cspr);
+    let (r13, r14) = cpu::get_r13r14(ctx.cpsr);
     let c = Context {
     r0: ctx.r0,
     r1: ctx.r1,
@@ -68,11 +72,11 @@ extern "C" fn vector_with_context(ctx : &mut InterruptContext) {
     sp: r13,
     lr: r14,
     pc: ctx.pc,
-    cspr: ctx.cspr,
+    cpsr: ctx.cpsr,
     };
     if let Some(newCtx) = $handler(&c) {
         // context switch!!
-        cpu::set_r13r14(c.cspr, newCtx.sp, newCtx.lr);
+        cpu::set_r13r14(c.cpsr, newCtx.sp, newCtx.lr);
         ctx.r0 = newCtx.r0;
         ctx.r1 = newCtx.r1;
         ctx.r2 = newCtx.r2;
@@ -87,7 +91,7 @@ extern "C" fn vector_with_context(ctx : &mut InterruptContext) {
         ctx.r11 = newCtx.r11;
         ctx.r12 = newCtx.r12;
         ctx.pc = newCtx.pc;
-        ctx.cspr = newCtx.cspr;
+        ctx.cpsr = newCtx.cpsr;
     }
 }
 
@@ -118,6 +122,7 @@ extern "C" fn vector_entry() {
     // http://wiki.osdev.org/ARM_Integrator-CP_IRQTimerPICTasksMMAndMods
 
     // restore all registers with s bit on
+    // sp will be restored automatically when we exit and restore cpsr
     unsafe{
     asm!("pop {r0}
           msr spsr, r0
@@ -264,4 +269,70 @@ fn vector_irq_handler(ctx : & Context) -> Option<Context> {
 fn vector_fiq_handler(ctx : & Context) -> Option<Context> {
     loop{};
     None
+}
+
+/*
+0:  r1
+4:  r2
+8:  r3
+12: r4
+16: r5
+20: r6
+24: r7
+28: r8
+32: r9
+36: r10
+40: r11
+44: r12
+48: sp
+52: pc
+56: lr
+60: cpsr
+couldn't find an easy way to calc offsets using compiler :(
+*/
+const PC_OFFSET : u32 =  52;
+const LR_OFFSET : u32 = 56;
+const CPSR_OFFSET : u32 = 60;
+const SP_OFFSET : u32 = 48;
+
+// called from kernel yeilding functions
+pub extern "C" fn switchContext(saveContext : &mut Context, newContext  : &Context) {
+    // save the non-scratch registers, as caller shouldn't care about the
+    // scratch registers or cpsr
+    unsafe{
+    asm!("mov r0, $0
+          mov r1, $1 
+          /* save to r1, restore from r0 */
+          stmfd sp!, {r4-r12,r14}
+          /* place leavefunc as pc and sp and cspr in save context */
+          adr r2, leavefunc
+          str r2, [r1, $2]
+          mrs r3, cpsr
+          str r3, [r1, $3]
+          /* store sp */
+          str sp, [r1, $4]
+
+
+          /* restore cspr to spcr */
+          ldr r3, [r0, $3]
+          msr spsr, r3
+
+          /* restore lr */
+          ldr lr, [r0, $4]
+          /* restore regs and context switch */
+          /* can't have LR here, see docs: http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0204j/Cihcadda.html */
+          ldm r0, {r0-r13,r15}^
+
+          /* context switched back; sp and pc should be correctly set for us, restore all the rest from the stack. */
+          leavefunc:
+
+          ldmfd sp!, {r4-r12,r14}
+
+    ":: "r"(newContext), "r"(saveContext) , 
+        "i"( PC_OFFSET ) , 
+        "i"( CPSR_OFFSET ), 
+        "i"( LR_OFFSET ),
+        "i"( SP_OFFSET ) :  : "volatile");
+    }
+
 }
