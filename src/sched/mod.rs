@@ -35,29 +35,45 @@ impl Sched {
         }
     }
 
-    pub fn spawn_thread(&mut self, f: fn()) {
+    pub fn spawn_thread(&mut self, thr : Thread) {
         // TODO thread safety and SMP Support
+        
 
+        let t = Box::new(thr);
+        self.threads.push(t);
         // find an eligble thread
         // threads.map()
     }
 
-    pub fn schedule(&mut self) -> C {
+    pub fn schedule(&mut self, ctx : & vector::Context) -> C {
+        self.threads[self.curr_thread_index].ctx = *ctx;
         // find an eligble thread
         // threads.map()
-        return self.threads[0].ctx;
+        return self.schedule_new();
+    }
+
+    fn schedule_new(&mut self) -> C {
+        // find an eligble thread
+        // threads.map()
+        self.curr_thread_index += 1;
+        // TODO linker with libgcc/compiler_rt so we can have division and mod
+        if self.curr_thread_index == self.threads.len() {
+            self.curr_thread_index = 0;
+        }
+        return self.threads[self.curr_thread_index].ctx;
     }
 
     pub fn yield_thread(&mut self) {
+        let curr_thread = self.curr_thread_index;
         // TODO: disable interrupts + mutex
-        let newContext = self.schedule();
+        let newContext = self.schedule_new();
         // switch active thread and save context.
         // current thread <- thread
         // enable interrupts + unmutex
         
         // save the context, and go go go
         // pc needs to be after save context
-        vector::switchContext(&mut self.threads[self.curr_thread_index].ctx, &newContext);
+        vector::switchContext(&mut self.threads[curr_thread].ctx, &newContext);
         // can't use curr_thread.ctx from here on, as it might died during context switch
 
         // we don't get here :)

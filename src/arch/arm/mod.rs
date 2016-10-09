@@ -8,6 +8,23 @@ use ::sched;
 use collections::boxed::Box;
 use device::serial::SerialMMIO;
 
+// TODO remove integrator::serial hack
+use self::integrator::serial;
+
+
+fn timer(ctx : & vector::Context) -> Option<vector::Context> {
+
+    unsafe{
+        if let Some(ref mut sched) = scheduler {
+            return Some(sched.schedule(ctx))
+        } else {
+            return None
+        }
+    }
+}
+
+static mut scheduler : Option<sched::Sched> = None;
+
 #[no_mangle]
 pub extern "C" fn arm_main<T : ::mem::FrameAllocator>(mapper : &mut ::mem::MemoryMapper, mut frameAllocator : T) -> !{
 
@@ -25,6 +42,27 @@ pub extern "C" fn arm_main<T : ::mem::FrameAllocator>(mapper : &mut ::mem::Memor
     };
     let sched : sched::Sched = sched::Sched::new(Box::new(t));
 
+    // TODO: this is really unsafe... solve with mutex? or atomic write?
+    unsafe {scheduler = Some(sched)};
+
+    //add another thread just for kicks
+    // TODO this is super lame; make this not lame.
+    const STACK2 : ::mem::VirtualAddress = ::mem::VirtualAddress(0xDD00_0000);
+    let pa = frameAllocator.allocate(1).unwrap();
+    mapper.map(&mut frameAllocator, pa, STACK2, mem::PAGE_SIZE);
+
+    let t1 : sched::Thread = sched::Thread{
+    ctx : vector::Context {
+        r0:0,r1:0,r2:0,r3:0,r4:0,r5:0,r6:0,r7:0,r8:0,r9:0,r10:0,r11:0,r12:0,sp:STACK2.uoffset(mem::PAGE_SIZE).0 as u32,lr:0,pc:t1 as u32,cpsr:cpu::get_cpsr()
+    }
+    };
+
+    // TODO wrap in safe methods.
+    unsafe{ 
+        scheduler.as_mut().unwrap().spawn_thread(t1);
+    }
+
+
   // DONE. install_interrupt_handlers();
   // DONE: init_timer
   // DONE init_heap()
@@ -41,7 +79,20 @@ pub extern "C" fn arm_main<T : ::mem::FrameAllocator>(mapper : &mut ::mem::Memor
  //   unsafe{asm!(".word 0xffffffff" :: :: "volatile");}
     ::rust_main();
 
-    loop {}
+    loop {
+    let mut w = &mut serial::Writer::new();
+    w.writeln("3333!!");
+       unsafe{ 
+        scheduler.as_mut().unwrap().yield_thread();
+    }
+    }
+}
+
+fn t1() {
+loop{
+    let mut w = &mut serial::Writer::new();
+    w.writeln("22222!!");
+}
 }
 
 #[allow(non_snake_case)]

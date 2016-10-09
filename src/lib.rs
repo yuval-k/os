@@ -7,6 +7,9 @@
 
 #![feature(alloc, collections)]
 
+// TODO: delete
+#![feature(drop_types_in_const)]
+
 #[macro_use]
 extern crate collections;
 
@@ -19,6 +22,7 @@ extern crate bitflags;
 pub mod device;
 pub mod arch;
 pub mod mem;
+pub mod sched;
 
 use arch::arm::integrator::serial;
 use device::serial as devserial;

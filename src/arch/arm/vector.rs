@@ -272,37 +272,40 @@ fn vector_fiq_handler(ctx : & Context) -> Option<Context> {
 }
 
 /*
-0:  r1
-4:  r2
-8:  r3
-12: r4
-16: r5
-20: r6
-24: r7
-28: r8
-32: r9
-36: r10
-40: r11
-44: r12
-48: sp
-52: pc
-56: lr
-60: cpsr
+0:  r0
+4:  r1
+8:  r2
+12: r3
+16: r4
+20: r5
+24: r6
+28: r7
+32: r8
+36: r9
+40: r10
+44: r11
+48: r12
+52: sp
+56: pc
+60: lr
+64: cpsr
 couldn't find an easy way to calc offsets using compiler :(
 */
-const PC_OFFSET : u32 =  52;
-const LR_OFFSET : u32 = 56;
-const CPSR_OFFSET : u32 = 60;
-const SP_OFFSET : u32 = 48;
+
+const PC_OFFSET : u32 =  56;
+const LR_OFFSET : u32 = 60;
+const CPSR_OFFSET : u32 = 64;
+const SP_OFFSET : u32 = 52;
 
 // called from kernel yeilding functions
-pub extern "C" fn switchContext(saveContext : &mut Context, newContext  : &Context) {
+pub extern "C" fn switchContext(currentContext : &mut Context, newContext  : &Context) {
     // save the non-scratch registers, as caller shouldn't care about the
     // scratch registers or cpsr
     unsafe{
     asm!("mov r0, $0
           mov r1, $1 
           /* save to r1, restore from r0 */
+          /* store regs in the stack - cause we can! */
           stmfd sp!, {r4-r12,r14}
           /* place leavefunc as pc and sp and cspr in save context */
           adr r2, leavefunc
@@ -310,8 +313,7 @@ pub extern "C" fn switchContext(saveContext : &mut Context, newContext  : &Conte
           mrs r3, cpsr
           str r3, [r1, $3]
           /* store sp */
-          str sp, [r1, $4]
-
+          str sp, [r1, $5]
 
           /* restore cspr to spcr */
           ldr r3, [r0, $3]
@@ -328,7 +330,7 @@ pub extern "C" fn switchContext(saveContext : &mut Context, newContext  : &Conte
 
           ldmfd sp!, {r4-r12,r14}
 
-    ":: "r"(newContext), "r"(saveContext) , 
+    ":: "r"(newContext), "r"(currentContext) , 
         "i"( PC_OFFSET ) , 
         "i"( CPSR_OFFSET ), 
         "i"( LR_OFFSET ),

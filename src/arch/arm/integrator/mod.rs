@@ -86,7 +86,7 @@ fn timer_happened(ctx : & vector::Context) -> Option<vector::Context> {
     w.writeln("timer!!");
     // TODO call scheduler
     
-    None
+    super::timer(ctx)
 }
 
 fn build_mode_stacks<T : ::mem::FrameAllocator>(mapper : &mut ::mem::MemoryMapper, mut frameAllocator : &mut T) {
