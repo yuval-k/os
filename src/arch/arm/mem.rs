@@ -507,6 +507,7 @@ impl ::mem::MemoryMapper for PageTable {
     Ok(())
   }
 
+// TODO add 1mb section; to help speed up things up!
   fn map_device(&mut self, frameallocator : & mut ::mem::FrameAllocator, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress, size : MemorySize) -> Result<(), ()> {
     let pages = ::mem::toPages(size).ok().unwrap();
     for i in 0..pages {
@@ -523,7 +524,7 @@ impl ::mem::MemoryMapper for PageTable {
   fn p2v(&mut self, p : ::mem::PhysicalAddress) ->  Option<::mem::VirtualAddress> {
     let l1table = self.descriptors.descriptors.iter();
     for (index, l1desc) in l1table.enumerate(){
-      if l1desc.is_present() {
+      if !l1desc.is_present() {
         continue;
       }
 

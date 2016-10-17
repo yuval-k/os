@@ -34,7 +34,7 @@ pub fn build_mode_stacks<T : ::mem::FrameAllocator>(mapper : &mut ::mem::MemoryM
 
 #[no_mangle]
 pub fn arm_main<T : ::mem::FrameAllocator>(mut mapper : self::mem::PageTable, mut frameAllocator : T) -> !{
-    // build mode stacks
+    // init intr and build mode stacks
    // TODO: add check if done, and do if not  build_mode_stacks(& mut mapper, &mut frameAllocator);
     // heap should work now!
 
