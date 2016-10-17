@@ -36,13 +36,20 @@ pub extern "C" fn integrator_main(
         stack_virt :  ::mem::VirtualAddress(sp_end_virt- mem::PAGE_SIZE),
         };
 
-    let skipRanges = [down(kernel_start_virt)..up(kernel_end_virt), down(ml.stack_virt.0) .. up(sp_end_virt), down(l1table_id) .. up(l2table_space_id + 4*mem::L2TABLE_ENTRIES) ];
+    let kernel_size = kernel_end_virt - kernel_start_virt;
+
+    let skipRanges = [down(kernel_start_phy)..up(kernel_start_phy + kernel_size), down(ml.stack_phy.0) .. up(sp_end_phy), down(l1table_id) .. up(l2table_space_id + 4*mem::L2TABLE_ENTRIES) ];
     // can't use short syntax: https://github.com/rust-lang/rust/pull/21846#issuecomment-110526401
     let mut freedRanges : [Option<ops::Range<::mem::PhysicalAddress>>;10] = [None,None,None,None,None,None,None,None,None,None];
     
     let mut frameAllocator = mem::LameFrameAllocator::new(&skipRanges, &mut freedRanges, 1<<27);
 
     let mut pageTable = mem::init_page_table(::mem::VirtualAddress(l1table_id), ::mem::VirtualAddress(l2table_space_id), &ml , &mut frameAllocator);
+
+    // init and map vector tables - we don't supposed to have to do this now, but it makes debugging easier..
+    pageTable.map(&mut frameAllocator, ::mem::PhysicalAddress(0), vector::VECTORS_ADDR, ::mem::MemorySize::PageSizes(1));
+    vector::init_interrupts();
+    super::build_mode_stacks(& mut pageTable, &mut frameAllocator);
 
     // map all the gpio
     pageTable.map_device(&mut frameAllocator, MMIO_PSTART, MMIO_VSTART, MMIO_PEND - MMIO_PSTART);

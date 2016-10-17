@@ -12,7 +12,7 @@ use device::serial::SerialMMIO;
 use self::integrator::serial;
 use ::mem::MemoryMapper;
 
-fn build_mode_stacks<T : ::mem::FrameAllocator>(mapper : &mut ::mem::MemoryMapper, mut frameAllocator : &mut T) {
+pub fn build_mode_stacks<T : ::mem::FrameAllocator>(mapper : &mut ::mem::MemoryMapper, mut frameAllocator : &mut T) {
 
     const stacks_base : ::mem::VirtualAddress = ::mem::VirtualAddress(0xb000_0000);
     
@@ -35,7 +35,7 @@ fn build_mode_stacks<T : ::mem::FrameAllocator>(mapper : &mut ::mem::MemoryMappe
 #[no_mangle]
 pub fn arm_main<T : ::mem::FrameAllocator>(mut mapper : self::mem::PageTable, mut frameAllocator : T) -> !{
     // build mode stacks
-    build_mode_stacks(& mut mapper, &mut frameAllocator);
+   // TODO: add check if done, and do if not  build_mode_stacks(& mut mapper, &mut frameAllocator);
     // heap should work now!
 
 
