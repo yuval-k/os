@@ -16,7 +16,7 @@ pub struct Thread{
     blocks_on: u32,
     */
 }
-
+ // TODO: make this Thread and SMP safe.
 pub struct Sched {
     threads: Vec<Box<Thread>>,
     curr_thread_index: usize,
@@ -85,4 +85,15 @@ impl Sched {
 
     }
 
+}
+
+impl platform::InterruptSource for Sched {
+    fn interrupted(&mut self, ctx : &mut platform::Context)  {
+
+        unsafe{
+            // TODO make this thread safe; or later in the init and remove altogether...
+            *ctx = self.schedule(ctx);
+        }
+
+    }
 }

@@ -10,8 +10,11 @@ use super::cpu;
 use super::thread;
 
 use collections::boxed::Box;
+use alloc::rc::Rc;
+use core::cell::RefCell;
 
 use mem::MemoryMapper;
+use platform;
 
 use device::serial::SerialMMIO;
 
@@ -67,16 +70,18 @@ pub struct PlatformServices {
 }
 
 // This function should be called when we have a heap and a scheduler.
-pub fn init_integrator(mapper : &mut ::mem::MemoryMapper) -> PlatformServices{
+pub fn init_integrator(mapper : &mut ::mem::MemoryMapper, sched_intr : Rc<RefCell<platform::InterruptSource>>) -> PlatformServices{
 
     let mut pic_ = Box::new(pic::PIC::new(mapper.p2v(pic::PIC_BASE_PADDR).unwrap()));
 
     // start a timer
-    let mut tmr = Box::new(timer::Timer::new(0, mapper.p2v(timer::TIMERS_BASE).unwrap()));
+    let mut tmr = Box::new(timer::Timer::new(0, mapper.p2v(timer::TIMERS_BASE).unwrap(), sched_intr));
 
     tmr.start_timer(true);
 
+
     pic_.add_timer_callback(tmr);
+    pic_.enable_interrupts(pic::TIMERINT0);
 
     // TODO not move the pic to the vector table.
     vector::get_vec_table().set_irq_callback(pic_);

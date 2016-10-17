@@ -544,7 +544,7 @@ impl ::mem::MemoryMapper for PageTable {
       for j in 0 .. l2_for_phy.descriptors.len() {
         if l2_for_phy[j].is_present() {
           let phy = l2_for_phy.descriptors[j].get_physical_address();
-          if down(p.0) == p.0 {
+          if down(p.0) == phy.0 {
             return Some(::mem::VirtualAddress((index << MB_SHIFT) + (j << PAGE_SHIFT)  + (p.0 & PAGE_MASK) ));
           }
         }

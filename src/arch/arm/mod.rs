@@ -6,10 +6,11 @@ pub mod thread;
 
 use kernel_alloc;
 use collections::boxed::Box;
-use device::serial::SerialMMIO;
+use alloc::rc::Rc;
+use core::cell::RefCell;
 
-// TODO remove integrator::serial hack
-use self::integrator::serial;
+use platform;
+
 use ::mem::MemoryMapper;
 
 pub fn build_mode_stacks<T : ::mem::FrameAllocator>(mapper : &mut ::mem::MemoryMapper, mut frameAllocator : &mut T) {
@@ -54,9 +55,9 @@ pub fn arm_main<T : ::mem::FrameAllocator>(mut mapper : self::mem::PageTable, mu
 
     // undefined instruction to test
  //   unsafe{asm!(".word 0xffffffff" :: :: "volatile");}
-    let initplat = |mm : &mut self::mem::PageTable, fa : &mut T| {
+    let initplat = |mm : &mut self::mem::PageTable, fa : &mut T, sched_intr : Rc<RefCell<platform::InterruptSource>> | {
         
-        let board_services = self::integrator::init_integrator(mm as &mut MemoryMapper);
+        let board_services = self::integrator::init_integrator(mm as &mut MemoryMapper, sched_intr);
 
         // init board
         PlatformServices{

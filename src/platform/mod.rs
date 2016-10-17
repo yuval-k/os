@@ -16,11 +16,6 @@ pub use ::arch::arm::mem::PAGE_SHIFT;
 #[cfg(target_arch = "arm")]
 pub type ArchPlatformServices = ::arch::arm::PlatformServices;
 
-pub struct PlatformServices {
-pub scheduler : super::sched::Sched,
-pub arch_services : ArchPlatformServices
-}
-
 pub const PAGE_SIZE : usize = 1<<PAGE_SHIFT;
 pub const PAGE_MASK : usize = PAGE_SIZE - 1;
 

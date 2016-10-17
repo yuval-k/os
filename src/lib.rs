@@ -13,6 +13,8 @@
 #[macro_use]
 extern crate collections;
 
+extern crate alloc;
+
 extern crate rlibc;
 extern crate kernel_alloc;
 
@@ -27,7 +29,8 @@ pub mod platform;
 
 
 use collections::boxed::Box;
-
+use alloc::rc::Rc;
+use core::cell::RefCell;
 
 fn init_heap(mapper : &mut ::mem::MemoryMapper, frameAllocator : &mut ::mem::FrameAllocator) {
     const heap_base : ::mem::VirtualAddress = mem::VirtualAddress(0xf000_0000);
@@ -38,14 +41,17 @@ fn init_heap(mapper : &mut ::mem::MemoryMapper, frameAllocator : &mut ::mem::Fra
 
 }
 
+pub struct PlatformServices {
+    pub scheduler : Rc<RefCell<self::sched::Sched>>,
+    pub arch_services : platform::ArchPlatformServices
+}
+
 
 pub fn rust_main<M,F,I>(mut mapper :  M, mut frame_allocator : F, init_platform: I) 
 where M : mem::MemoryMapper,
       F : mem::FrameAllocator,
-      I: Fn(&mut M, &mut F) -> platform::ArchPlatformServices {
+      I: Fn(&mut M, &mut F, Rc<RefCell<platform::InterruptSource>>) -> platform::ArchPlatformServices {
     init_heap(&mut mapper, &mut frame_allocator);
-
-    let arch_platform_services = init_platform(&mut mapper, &mut frame_allocator);
 
     let t : sched::Thread = sched::Thread{
         ctx : platform::Context {
@@ -53,16 +59,19 @@ where M : mem::MemoryMapper,
             r0:0,r1:0,r2:0,r3:0,r4:0,r5:0,r6:0,r7:0,r8:0,r9:0,r10:0,r11:0,r12:0,sp:0,lr:0,pc:0,cpsr:0
         }
     };
-
     // init scheduler
-    let sched : sched::Sched = sched::Sched::new(Box::new(t));
+    let sched = Rc::new(RefCell::new(sched::Sched::new(Box::new(t))));
 
+    let arch_platform_services = init_platform(&mut mapper, &mut frame_allocator, sched.clone());
 
-    let mut platform_services = platform::PlatformServices {
+    // enable interrupts!
+    platform::set_interrupts(true);
+    
+
+    let mut platform_services = PlatformServices {
         scheduler : sched,
         arch_services : arch_platform_services
     };
-
 
     // time to enable interrupts
     platform::set_interrupts(true);
@@ -81,7 +90,12 @@ where M : mem::MemoryMapper,
     };
 
     // TODO wrap in safe methods.
-    platform_services.scheduler.spawn_thread(t1);
+    
+    platform_services.scheduler.borrow_mut().spawn_thread(t1);
+
+    loop {
+     //   platform_services.scheduler.borrow_mut().yield_thread();
+    }
     
 
     // turn on identity map for a lot of bytes
@@ -100,18 +114,6 @@ where M : mem::MemoryMapper,
     w.write_byte('a' as u8);
     w.write_byte('l' as u8);
 */
-}
-
-// figure out how to get the timer interrupt here...
-fn timer(ctx : &mut platform::Context)  {
-/*
-    unsafe{
-        // TODO make this thread safe; or later in the init and remove altogether...
-        if let Some(ref mut sched) = scheduler {
-            *ctx = sched.schedule(ctx);
-        } 
-    }
-    */
 }
 
 
