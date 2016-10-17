@@ -11,6 +11,9 @@ extern crate linked_list_allocator;
 // thanks phil!
 // http://os.phil-opp.com/kernel-heap.html
 
+// TODO replace with somthing that more dynamic that an allocate AND deallocate pages.
+
+
 use core::cell::UnsafeCell;
 use core::ops::{Drop, Deref, DerefMut};
 

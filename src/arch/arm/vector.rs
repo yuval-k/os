@@ -1,6 +1,10 @@
 use core::slice;
 use core::mem;
 use super::cpu;
+use super::thread::Context;
+use platform;
+
+use collections::boxed::Box;
 
 // processor jumps to address 0 so must be ID mapper here for now, till (if?) if will relocate the vectors.
 // pub const VECTORS_ADDR : ::mem::VirtualAddress  = ::mem::VirtualAddress(0xea00_0000);
@@ -27,35 +31,13 @@ struct InterruptContext{
     pc: u32,
 }
 
-// NOTE: DO NOT change struct without changing the inline assembly in switchContext
-#[repr(C, packed)]
-#[derive(Copy, Clone)]
-pub struct Context {
-    pub r0: u32,
-    pub r1: u32,
-    pub r2: u32,
-    pub r3: u32,
-    pub r4: u32,
-    pub r5: u32,
-    pub r6: u32,
-    pub r7: u32,
-    pub r8: u32,
-    pub r9: u32,
-    pub r10: u32,
-    pub r11: u32,
-    pub r12: u32,
-    pub sp: u32,
-    pub pc: u32,
-    pub lr: u32,
-    pub cpsr: u32,
-}
 
 macro_rules! inthandler {
     ( $handler:ident ) => {{ 
 
 extern "C" fn vector_with_context(ctx : &mut InterruptContext) {
     let (r13, r14) = cpu::get_r13r14(ctx.cpsr);
-    let c = Context {
+    let mut c = Context {
     r0: ctx.r0,
     r1: ctx.r1,
     r2: ctx.r2,
@@ -74,25 +56,27 @@ extern "C" fn vector_with_context(ctx : &mut InterruptContext) {
     pc: ctx.pc,
     cpsr: ctx.cpsr,
     };
-    if let Some(newCtx) = $handler(&c) {
-        // context switch!!
-        cpu::set_r13r14(c.cpsr, newCtx.sp, newCtx.lr);
-        ctx.r0 = newCtx.r0;
-        ctx.r1 = newCtx.r1;
-        ctx.r2 = newCtx.r2;
-        ctx.r3 = newCtx.r3;
-        ctx.r4 = newCtx.r4;
-        ctx.r5 = newCtx.r5;
-        ctx.r6 = newCtx.r6;
-        ctx.r7 = newCtx.r7;
-        ctx.r8 = newCtx.r8;
-        ctx.r9 = newCtx.r9;
-        ctx.r10 = newCtx.r10;
-        ctx.r11 = newCtx.r11;
-        ctx.r12 = newCtx.r12;
-        ctx.pc = newCtx.pc;
-        ctx.cpsr = newCtx.cpsr;
-    }
+    
+    $handler(&mut c);
+
+    // potentially context switch - so restore registers incase handler changed them!!
+    cpu::set_r13r14(c.cpsr, c.sp, c.lr);
+    ctx.r0 = c.r0;
+    ctx.r1 = c.r1;
+    ctx.r2 = c.r2;
+    ctx.r3 = c.r3;
+    ctx.r4 = c.r4;
+    ctx.r5 = c.r5;
+    ctx.r6 = c.r6;
+    ctx.r7 = c.r7;
+    ctx.r8 = c.r8;
+    ctx.r9 = c.r9;
+    ctx.r10 = c.r10;
+    ctx.r11 = c.r11;
+    ctx.r12 = c.r12;
+    ctx.pc = c.pc;
+    ctx.cpsr = c.cpsr;
+
 }
 
 #[naked]
@@ -136,33 +120,6 @@ vector_entry
     }}
 }
 
-
-/*
-based on:
-
-.globl vector_start, vector_end
-vector_start
-	ldr pc, [pc, #24]
-	ldr pc, [pc, #24]
-	ldr pc, [pc, #24]
-	ldr pc, [pc, #24]
-	ldr pc, [pc, #24]
-	nop
-	ldr pc, [pc, #24]
-	ldr pc, [pc, #24]
-
-	.word	vector_reset
-	.word	vector_undefined
-	.word	vector_softint
-	.word	vector_prefetch_abort
-	.word	vector_data_abort
-	.word	0
-	.word	vector_irq
-	.word	vector_fiq
-vector_end:
-
-*/ 
-
  
 #[naked]
  fn vector_table_asm() {
@@ -172,7 +129,7 @@ vector_end:
 }
 
 // TODO change vec_table to point to the right place in memory
-pub fn build_vector_table() {
+pub fn init_interrupts() {
     unsafe {
         let mut vec_table : &'static mut [u32] = slice::from_raw_parts_mut(VECTORS_ADDR.0 as *mut u32, 4*8*2);
 
@@ -198,143 +155,56 @@ pub fn build_vector_table() {
     }
 }
 
-// TODO: sync access to this or even better, to it lock free :)
-static mut vecTable : VectorTable = VectorTable{
-    irq_callbacks : [None;10],
-    index : 0,
-};
-
-// TODO: make thread safe !!
-pub fn get_vec_table() -> &'static mut VectorTable { unsafe { &mut vecTable } }
-
 pub struct VectorTable {
     // TODO re-write when we have a heap
-    irq_callbacks : [Option<fn(ctx : & Context) -> Option<Context> >;10],
-    index : usize,
+    irq_callback : Option<Box<platform::InterruptSource>>,
 }
 
+// TODO: sync access to this or even better, to it lock free :)
+static mut vecTable : VectorTable = VectorTable{
+    irq_callback : None
+};
+
+// TODO: make thread safe if multi processing !!
+pub fn get_vec_table() -> &'static mut VectorTable{ unsafe{ &mut vecTable } }
+
 impl VectorTable {
-    pub fn register_irq(&mut self, callback : fn(ctx : & Context) -> Option<Context>) {
-        self.irq_callbacks[self.index] = Some(callback);
-        self.index += 1;
+    pub fn set_irq_callback(&mut self, callback : Box<platform::InterruptSource>) {
+        self.irq_callback = Some(callback);
     }
 }
 
-fn vector_reset_handler(ctx : & Context) -> Option<Context> {
+fn vector_reset_handler(ctx : &mut Context){
 
     // TODO : call scheduler
     loop{};
-    None
 
 }
 
-fn vector_undefined_handler(ctx : & Context) -> Option<Context> {
+fn vector_undefined_handler(ctx : &mut Context){
     loop{};
-    None
 }
 
-fn vector_softint_handler(ctx : & Context) -> Option<Context> {
+fn vector_softint_handler(ctx : &mut Context){
     loop{};
-    None
 }
 
-fn vector_prefetch_abort_handler(ctx : & Context) -> Option<Context> {
+fn vector_prefetch_abort_handler(ctx : &mut Context) {
     loop{};
-    None
 }
 
-fn vector_data_abort_handler(ctx : & Context) -> Option<Context> {
+fn vector_data_abort_handler(ctx : &mut Context){
     loop{};
-    None
 }
 
-fn vector_irq_handler(ctx : & Context) -> Option<Context> {
+fn vector_irq_handler(ctx : &mut Context){
     unsafe {
-        for i in 0..vecTable.index {
-            if let Some(func) = vecTable.irq_callbacks[i] {
-                let ret = func(ctx);
-                match ret {
-                    Some(_) => {
-                        return ret;
-                    },
-                    _ => {},
-                }
-            }
+        if let Some(ref mut func) = vecTable.irq_callback {
+            func.interrupted(ctx);
         }
     }
-
-    None
 }
 
 fn vector_fiq_handler(ctx : & Context) -> Option<Context> {
-    loop{};
-    None
-}
-
-/*
-0:  r0
-4:  r1
-8:  r2
-12: r3
-16: r4
-20: r5
-24: r6
-28: r7
-32: r8
-36: r9
-40: r10
-44: r11
-48: r12
-52: sp
-56: pc
-60: lr
-64: cpsr
-couldn't find an easy way to calc offsets using compiler :(
-*/
-
-const PC_OFFSET : u32 =  56;
-const LR_OFFSET : u32 = 60;
-const CPSR_OFFSET : u32 = 64;
-const SP_OFFSET : u32 = 52;
-
-// called from kernel yeilding functions
-pub extern "C" fn switchContext(currentContext : &mut Context, newContext  : &Context) {
-    // save the non-scratch registers, as caller shouldn't care about the
-    // scratch registers or cpsr
-    unsafe{
-    asm!("mov r0, $0
-          mov r1, $1 
-          /* save to r1, restore from r0 */
-          /* store regs in the stack - cause we can! */
-          stmfd sp!, {r4-r12,r14}
-          /* place leavefunc as pc and sp and cspr in save context */
-          adr r2, leavefunc
-          str r2, [r1, $2]
-          mrs r3, cpsr
-          str r3, [r1, $3]
-          /* store sp */
-          str sp, [r1, $5]
-
-          /* restore cspr to spcr */
-          ldr r3, [r0, $3]
-          msr spsr, r3
-
-          /* restore lr */
-          ldr lr, [r0, $4]
-          /* restore regs and context switch */
-          /* can't have LR here, see docs: http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0204j/Cihcadda.html */
-          ldm r0, {r0-r13,r15}^
-
-          /* context switched back; sp and pc should be correctly set for us, restore all the rest from the stack. */
-          leavefunc:
-
-          ldmfd sp!, {r4-r12,r14}
-
-    ":: "r"(newContext), "r"(currentContext) , 
-        "i"( PC_OFFSET ) , 
-        "i"( CPSR_OFFSET ), 
-        "i"( LR_OFFSET ),
-        "i"( SP_OFFSET ) :  : "volatile");
-    }
-
+    loop{}
 }

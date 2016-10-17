@@ -1,20 +1,20 @@
 use core::intrinsics::{volatile_load, volatile_store};
+use collections::boxed::Box;
+use platform;
 
 // section 3.6 in: http://infocenter.arm.com/help/topic/com.arm.doc.dui0159b/DUI0159B_integratorcp_1_0_ug.pdf
-pub const PIC_BASE_VADDR : ::mem::VirtualAddress  = ::mem::VirtualAddress(0x1400_0000);
 pub const PIC_BASE_PADDR : ::mem::PhysicalAddress  = ::mem::PhysicalAddress(0x1400_0000);
 
-pub const PIC_IRQ_STATUS : ::mem::PhysicalAddress  = ::mem::PhysicalAddress(0x14000000);
-pub const PIC_IRQ_RAWSTAT : ::mem::PhysicalAddress  = ::mem::PhysicalAddress(0x14000004);
-pub const PIC_IRQ_ENABLESET : ::mem::PhysicalAddress  = ::mem::PhysicalAddress(0x14000008);
-pub const PIC_IRQ_ENABLECLR : ::mem::PhysicalAddress  = ::mem::PhysicalAddress(0x1400000C);
-pub const PIC_INT_SOFTSET : ::mem::PhysicalAddress  = ::mem::PhysicalAddress(0x14000010);
-pub const PIC_INT_SOFTCLR : ::mem::PhysicalAddress  = ::mem::PhysicalAddress(0x14000014);
-
-pub const PIC_FIQ_STATUS : ::mem::PhysicalAddress  = ::mem::PhysicalAddress(0x14000020);
-pub const PIC_FIQ_RAWSTAT : ::mem::PhysicalAddress  = ::mem::PhysicalAddress(0x14000024);
-pub const PIC_FIQ_ENABLESET : ::mem::PhysicalAddress  = ::mem::PhysicalAddress(0x14000028);
-pub const PIC_FIQ_ENABLECLR : ::mem::PhysicalAddress  = ::mem::PhysicalAddress(0x1400002C);
+pub const PIC_IRQ_STATUS_OFFSET : usize = 0x00;
+pub const PIC_IRQ_RAWSTAT_OFFSET : usize = 0x04;
+pub const PIC_IRQ_ENABLESET_OFFSET : usize = 0x08;
+pub const PIC_IRQ_ENABLECLR_OFFSET : usize = 0x0C;
+pub const PIC_INT_SOFTSET_OFFSET : usize = 0x10;
+pub const PIC_INT_SOFTCLR_OFFSET : usize = 0x14;
+pub const PIC_FIQ_STATUS_OFFSET : usize = 0x20;
+pub const PIC_FIQ_RAWSTAT_OFFSET : usize = 0x24;
+pub const PIC_FIQ_ENABLESET_OFFSET : usize = 0x28;
+pub const PIC_FIQ_ENABLECLR_OFFSET : usize = 0x2C;
 
 bitflags! {
     pub flags PicFlags: u32 {
@@ -39,21 +39,63 @@ bitflags! {
     }
 }
 
-
-pub fn enable_interrupts(flags : PicFlags) {
-    let ptr : *mut u32 = ((PIC_IRQ_ENABLESET.0 - PIC_BASE_PADDR.0) + PIC_BASE_VADDR.0) as *mut u32;
-    unsafe {volatile_store(ptr, flags.bits);}
+pub struct PIC {
+    vbase : ::mem::VirtualAddress,
+    callback : Option<Box<platform::InterruptSource>>
 }
 
-pub fn clear_interrupts(flags : PicFlags) {
-    let ptr : *mut u32 = ((PIC_IRQ_ENABLECLR.0 - PIC_BASE_PADDR.0) + PIC_BASE_VADDR.0) as *mut u32;
-    unsafe {volatile_store(ptr, flags.bits);}
+impl PIC {
+
+    pub fn new(vbase : ::mem::VirtualAddress) -> PIC {
+        PIC {
+            vbase : vbase,
+            callback : None,
+        }
+        // register at vector table
+    // assume mmio is already mapped, and just find it's address.  pageTable.map_device(&mut frameAllocator, pic::PIC_BASE_PADDR, pic::PIC_BASE_VADDR);
+    // do it outside in init
+        // TODO vector::get_vec_table().register_irq(interrupt_happened);
+
+    }
+
+    pub fn add_timer_callback(&mut self, callback : Box<platform::InterruptSource> ) {
+        self.callback = Some(callback);
+    }
+
+    pub fn enable_interrupts(&mut self, flags : PicFlags) {
+        let ptr : *mut u32 = self.vbase.uoffset(PIC_IRQ_ENABLESET_OFFSET).0 as *mut u32;
+        unsafe {volatile_store(ptr, flags.bits);}
+    }
+
+    pub fn clear_interrupts(&mut self, flags : PicFlags) {
+        let ptr : *mut u32 = self.vbase.uoffset(PIC_IRQ_ENABLECLR_OFFSET).0 as *mut u32;
+        unsafe {volatile_store(ptr, flags.bits);}
+    }
+
+    pub fn interrupt_status(&self) ->  PicFlags {
+        let mut flags : PicFlags = PicFlags::empty();
+        let ptr : *mut u32 = self.vbase.uoffset(PIC_IRQ_STATUS_OFFSET).0 as *mut u32;
+        flags.bits = unsafe {volatile_load(ptr)};
+        
+        flags
+    }
+
 }
 
-pub fn interrupt_status() ->  PicFlags{
-    let mut flags : PicFlags = PicFlags::empty();
-    let ptr : *mut u32 = ((PIC_IRQ_STATUS.0 - PIC_BASE_PADDR.0) + PIC_BASE_VADDR.0) as *mut u32;
-    flags.bits = unsafe {volatile_load(ptr)};
-    
-    flags
+impl platform::InterruptSource for PIC {
+    fn interrupted(&mut self, ctx : &mut platform::Context) {
+        let status = self.interrupt_status();
+
+        if status.contains(TIMERINT0) {
+            if let Some(ref mut callback) = self.callback {
+                callback.interrupted(ctx);
+            }
+        }
+         
+        // TODO switch back to main thread to deal with this...
+        // let it know what interrupt happened
+        // once we have semaphores or some other way of sync objects.
+
+
+    }
 }

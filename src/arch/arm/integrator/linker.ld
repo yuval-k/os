@@ -27,7 +27,7 @@ SECTIONS
    /* _stub_end = ALIGN(0x1000);  hack till we improve the stub... kernel needs to be 1mb align*/
     _stub_end = ALIGN(0x100000);
 	/* kernel virtual address! */
-	. = 0xC0000000;
+	. = 0xCC000000;
 	_kernel_start_phy = _stub_end;
 	_kernel_start_virt = .;
 

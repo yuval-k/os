@@ -1,4 +1,22 @@
-// #[inline(always)] -> cause these might be used in the stub
+use core::cell::UnsafeCell;
+use core::ops::{Drop, Deref, DerefMut};
+
+
+pub const USER_MODE : u32 = 0b10000;
+pub const FIQ_MODE : u32 = 0b10001;
+pub const IRQ_MODE : u32 = 0b10010;
+pub const SUPER_MODE : u32 = 0b10011;
+pub const ABRT_MODE : u32 = 0b10111;
+pub const UNDEF_MODE : u32 = 0b11011;
+pub const SYS_MODE : u32 = 0b11111;
+
+pub const MODE_MASK : u32 = 0b11111;
+
+const DISABLE_FIQ : u32 = 1 << 6;
+const DISABLE_IRQ : u32 = 1 << 7;
+
+
+// #[inline(always)] -> cause these might be used in the stub (the rest of program code will be mapped later)
 
 #[inline(always)]
 pub fn memory_write_barrier() {
@@ -90,8 +108,9 @@ pub fn write_domain_access_control_register(dcr :u32) {
 }
 
 
+// c1 register controls the mmu
 #[inline(always)]
-pub fn get_p15_c1() -> u32{
+fn get_p15_c1() -> u32{
   let mut cr : u32;
   unsafe{
     asm!("mcr p15, 0, $0, c1, c0, 0"
@@ -102,7 +121,8 @@ pub fn get_p15_c1() -> u32{
 }
 
 #[inline(always)]
-pub fn set_p15_c1(cr : u32) {
+
+fn set_p15_c1(cr : u32) {
   unsafe{
     asm!("mcr p15, 0, $0, c1, c0, 0"
           :: "r"(cr) :: "volatile"
@@ -133,79 +153,37 @@ pub fn enable_mmu() {
 }
 
 
-pub fn clear_caches() {
-
-    // TODO:
-    // see http://stackoverflow.com/questions/16383007/what-is-the-right-way-to-update-mmu-translation-table
-}
-
 /* not called from stub goes here: */
 
-const USER_MODE : u32 = 0b10000;
-const FIQ_MODE : u32 = 0b10001;
-const IRQ_MODE : u32 = 0b10010;
-const SUPER_MODE : u32 = 0b10011;
-const ABRT_MODE : u32 = 0b10111;
-const UNDEF_MODE : u32 = 0b11011;
-const SYS_MODE : u32 = 0b11111;
-const MODE_MASK : u32 = 0b11111;
 
-const DISABLE_FIQ : u32 = 1 << 6;
-const DISABLE_IRQ : u32 = 1 << 7;
+pub fn set_stack_for_mode(mode : u32, stack_base : ::mem::VirtualAddress) {
 
-pub fn set_stack_for_modes(stack_base : ::mem::VirtualAddress) {
     unsafe {
-      asm!("mov r0, $0
-            add r0,r0, #0x1000
+      asm!("
+            /* change cpu mode */
+            mov r0, $0
+            mov r2, $2
             mrs r1, cpsr
             bic r1, r1, $1
-	          orr r1, r1, $2   /* FIQ */
+	        orr r1, r1, r2
             msr cpsr_c, r1
+            /* set stack */
             mov sp, r0
-            
-            add r0,r0, #0x1000
+            /* back to supervisor mode */
             bic r1, r1, $1
-	          orr r1, r1, $3  /* IRQ */
-            msr cpsr_c, r1
-            mov sp, r0
-            
-            add r0,r0, #0x1000
-            bic r1, r1, $1
-	          orr r1, r1, $4  /* ABRT */
-            msr cpsr_c, r1
-            mov sp, r0
-            
-            add r0,r0, #0x1000
-            bic r1, r1, $1
-	          orr r1, r1, $5  /* UNDEF */
-            msr cpsr_c, r1
-            mov sp, r0
-            
-            add r0,r0, #0x1000
-            bic r1, r1, $1
-	          orr r1, r1, $6  /* SYS \\ USER */
-            msr cpsr_c, r1
-            mov sp, r0
-            
-
-            bic r1, r1, $1
-	          orr r1, r1, $7 /* back to supervisor mode */
+            orr r1, r1, $3
             msr cpsr_c, r1
             "
-            :: 
+            :
+            :
             "r"(stack_base.0),
             "i"(MODE_MASK),
-            "i"(FIQ_MODE),
-            "i"(IRQ_MODE),
-            "i"(ABRT_MODE),
-            "i"(UNDEF_MODE),
-            "i"(SYS_MODE),
+            "r"(mode),
             "i"(SUPER_MODE)
             : "sp","r0","r1","cpsr" : "volatile"
-      )
-    }
+            )
+            };
 }
-
 
 pub fn disable_interrupts() {
     unsafe {

@@ -7,6 +7,9 @@ use core::ops;
 use super::mem;
 use super::vector;
 use super::cpu;
+use super::thread;
+
+use collections::boxed::Box;
 
 use mem::MemoryMapper;
 
@@ -14,6 +17,10 @@ use device::serial::SerialMMIO;
 
 fn up(a : usize) -> ::mem::PhysicalAddress {::mem::PhysicalAddress((a + mem::PAGE_MASK) & (!mem::PAGE_MASK))}
 fn down(a : usize) -> ::mem::PhysicalAddress { ::mem::PhysicalAddress((a ) & (!mem::PAGE_MASK))}
+
+const MMIO_PSTART : ::mem::PhysicalAddress = ::mem::PhysicalAddress(0x1000_0000);
+const MMIO_PEND : ::mem::PhysicalAddress = ::mem::PhysicalAddress(0x1F00_0000);
+const MMIO_VSTART : ::mem::VirtualAddress = ::mem::VirtualAddress(0x1000_0000);
 
 #[no_mangle]
 pub extern "C" fn integrator_main(
@@ -37,66 +44,37 @@ pub extern "C" fn integrator_main(
 
     let mut pageTable = mem::init_page_table(::mem::VirtualAddress(l1table_id), ::mem::VirtualAddress(l2table_space_id), &ml , &mut frameAllocator);
 
-    // init interrupt vectors
-    build_mode_stacks(& mut pageTable, &mut frameAllocator);
-    // map vector tables
-    pageTable.map(&mut frameAllocator, ::mem::PhysicalAddress(0), vector::VECTORS_ADDR, 1);
-    vector::build_vector_table();
+    // map all the gpio
+    pageTable.map_device(&mut frameAllocator, MMIO_PSTART, MMIO_VSTART, MMIO_PEND - MMIO_PSTART);
 
-    // map serial
-    pageTable.map_device(&mut frameAllocator, serial::SERIAL_BASE_PADDR, serial::SERIAL_BASE_VADDR);
-    // print to serial should work now!
-
-    // map interrupt controller
-    pageTable.map_device(&mut frameAllocator, pic::PIC_BASE_PADDR, pic::PIC_BASE_VADDR);
-    // map timer
-    pageTable.map_device(&mut frameAllocator, timer::TIMER_BASE_PADDR, timer::TIMER_BASE_VADDR);
-
-    let mut w = &mut serial::Writer::new();
+    let mut w = &mut serial::Writer::new(pageTable.p2v(serial::SERIAL_BASE_PADDR).unwrap());
     w.writeln("Welcome home!");
 
-    // register irq handler
-    vector::get_vec_table().register_irq(interrupt_happened);
-
-    // enable interrupts from the PIC
-    cpu::enable_interrupts();
-    // enable timer0 interrupt
-    pic::enable_interrupts(pic::TIMERINT0);
-    // start timer0
-    timer::start_timer0();
-
-    ::arch::arm::arm_main(&mut pageTable, frameAllocator);
+    ::arch::arm::arm_main(pageTable, frameAllocator);
 
     loop {}
 }
 
-fn interrupt_happened(ctx : & vector::Context) -> Option<vector::Context> {
-    if pic::interrupt_status().contains(pic::TIMERINT0) {
-        return timer_happened(ctx);
+pub struct PlatformServices {
+//    pic : Box<pic::PIC>
+}
+
+// This function should be called when we have a heap and a scheduler.
+pub fn init_integrator(mapper : &mut ::mem::MemoryMapper) -> PlatformServices{
+
+    let mut pic_ = Box::new(pic::PIC::new(mapper.p2v(pic::PIC_BASE_PADDR).unwrap()));
+
+    // start a timer
+    let mut tmr = Box::new(timer::Timer::new(0, mapper.p2v(timer::TIMERS_BASE).unwrap()));
+
+    tmr.start_timer(true);
+
+    pic_.add_timer_callback(tmr);
+
+    // TODO not move the pic to the vector table.
+    vector::get_vec_table().set_irq_callback(pic_);
+
+    PlatformServices{
+    //    pic: pic_
     }
-    
-    None
-}
-
-fn timer_happened(ctx : & vector::Context) -> Option<vector::Context> {
-    // clear the interrupt
-    timer::clear_interrupt0();
-
-    let mut w = &mut serial::Writer::new();
-    w.writeln("timer!!");
-    // TODO call scheduler
-    
-    super::timer(ctx)
-}
-
-fn build_mode_stacks<T : ::mem::FrameAllocator>(mapper : &mut ::mem::MemoryMapper, mut frameAllocator : &mut T) {
-
-    const stacks_base : ::mem::VirtualAddress = ::mem::VirtualAddress(0xb000_0000);
-    // allocate 5 pages
-    let pa = frameAllocator.allocate(5).unwrap();
-
-    // 4k per stack; so need 5*4kb memory = five pages
-    mapper.map(frameAllocator, pa, stacks_base, 5*mem::PAGE_SIZE);
-    
-    cpu::set_stack_for_modes(stacks_base);
 }

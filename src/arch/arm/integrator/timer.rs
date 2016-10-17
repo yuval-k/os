@@ -1,32 +1,18 @@
 use core::intrinsics::{volatile_load, volatile_store};
-
-pub const TIMER_BASE_VADDR : ::mem::VirtualAddress  = ::mem::VirtualAddress(0x1300_0000);
-pub const TIMER_BASE_PADDR : ::mem::PhysicalAddress  = ::mem::PhysicalAddress(0x1300_0000);
+use platform;
 
 // section 4.9.2 in: http://infocenter.arm.com/help/topic/com.arm.doc.dui0159b/DUI0159B_integratorcp_1_0_ug.pdf
-pub const TIMER0_LOAD : ::mem::PhysicalAddress    = ::mem::PhysicalAddress(0x1300_0000);
-pub const TIMER0_VALUE : ::mem::PhysicalAddress   = ::mem::PhysicalAddress(0x1300_0004);
-pub const TIMER0_CNTRL : ::mem::PhysicalAddress   = ::mem::PhysicalAddress(0x1300_0008);
-pub const TIMER0_INTCLR : ::mem::PhysicalAddress  = ::mem::PhysicalAddress(0x1300_000C);
-pub const TIMER0_RIS : ::mem::PhysicalAddress     = ::mem::PhysicalAddress(0x1300_0010);
-pub const TIMER0_MIS : ::mem::PhysicalAddress     = ::mem::PhysicalAddress(0x1300_0014);
-pub const TIMER0_BG_LOAD : ::mem::PhysicalAddress = ::mem::PhysicalAddress(0x1300_0018);
 
-pub const TIMER1_LOAD : ::mem::PhysicalAddress    = ::mem::PhysicalAddress(0x1300_0100);
-pub const TIMER1_VALUE : ::mem::PhysicalAddress   = ::mem::PhysicalAddress(0x1300_0104);
-pub const TIMER1_CNTRL : ::mem::PhysicalAddress   = ::mem::PhysicalAddress(0x1300_0108);
-pub const TIMER1_INTCLR : ::mem::PhysicalAddress  = ::mem::PhysicalAddress(0x1300_010C);
-pub const TIMER1_RIS : ::mem::PhysicalAddress     = ::mem::PhysicalAddress(0x1300_0110);
-pub const TIMER1_MIS : ::mem::PhysicalAddress     = ::mem::PhysicalAddress(0x1300_0114);
-pub const TIMER1_BG_LOAD : ::mem::PhysicalAddress = ::mem::PhysicalAddress(0x1300_0118);
+pub const TIMERS_BASE : ::mem::PhysicalAddress = ::mem::PhysicalAddress(0x1300_0000);
+pub const TIMER_BASE_OFFSET : usize = 0x100;
 
-pub const TIMER2_LOAD : ::mem::PhysicalAddress    = ::mem::PhysicalAddress(0x1300_0200);
-pub const TIMER2_VALUE : ::mem::PhysicalAddress   = ::mem::PhysicalAddress(0x1300_0204);
-pub const TIMER2_CNTRL : ::mem::PhysicalAddress   = ::mem::PhysicalAddress(0x1300_0208);
-pub const TIMER2_INTCLR : ::mem::PhysicalAddress  = ::mem::PhysicalAddress(0x1300_020C);
-pub const TIMER2_RIS : ::mem::PhysicalAddress     = ::mem::PhysicalAddress(0x1300_0210);
-pub const TIMER2_MIS : ::mem::PhysicalAddress     = ::mem::PhysicalAddress(0x1300_0214);
-pub const TIMER2_BG_LOAD : ::mem::PhysicalAddress = ::mem::PhysicalAddress(0x1300_0218);
+pub const TIMER_LOAD_OFFSET : usize    = 0x00;
+pub const TIMER_VALUE_OFFSET : usize   = 0x04;
+pub const TIMER_CNTRL_OFFSET : usize   = 0x08;
+pub const TIMER_INTCLR_OFFSET : usize  = 0x0C;
+pub const TIMER_RIS_OFFSET : usize     = 0x10;
+pub const TIMER_MIS_OFFSET : usize     = 0x14;
+pub const TIMER_BG_LOAD_OFFSET : usize = 0x18;
 
 bitflags! {
     pub flags TimerControlFlags: u32 {
@@ -41,20 +27,59 @@ bitflags! {
     }
 }
 
-
-pub fn start_timer0() {
-    set_value(TIMER0_LOAD, 0xffffff);
-    set_value(TIMER0_BG_LOAD, 0xffffff);
-    set_value(TIMER0_CNTRL, (ENABLE | INT_EN | PERIODIC | TIMER_SIZE_32).bits);
-    clear_interrupt0(); // pancakes did it (http://wiki.osdev.org/ARM_Integrator-CP_IRQTimerAndPICAndTaskSwitch) and i love precautions. OS goals are educational not production.
+pub struct Timer {
+    index : usize,
+    base : ::mem::VirtualAddress // this should be mapped to TIMERS_BASE
 }
 
 
-pub fn clear_interrupt0() {
-    set_value(TIMER0_INTCLR, 1);
+impl Timer {
+    pub fn new(index : usize, timerbase : ::mem::VirtualAddress) -> Timer {
+        Timer {
+            index : index,
+            base : timerbase.uoffset(index * TIMER_BASE_OFFSET),
+        }
+    }
+
+    pub fn start_timer(&mut self, intr : bool) {
+        set_value(self.base.uoffset(TIMER_LOAD_OFFSET), 0xffffff);
+        set_value(self.base.uoffset(TIMER_BG_LOAD_OFFSET), 0xffffff);
+        let mut flags = ENABLE | PERIODIC | TIMER_SIZE_32;
+        if intr {
+            flags = flags | INT_EN;
+        }
+        set_value(self.base.uoffset(TIMER_CNTRL_OFFSET), flags.bits);
+        self.clear_interrupt();
+    }
+
+    pub fn clear_interrupt(&mut self) {
+        set_value(self.base.uoffset(TIMER_INTCLR_OFFSET), 1);
+    }
+
 }
 
-fn set_value(p  : ::mem::PhysicalAddress, v : u32) {
-    let ptr : *mut u32 = ((p.0 - TIMER_BASE_PADDR.0) + TIMER_BASE_VADDR.0) as *mut u32;
+impl platform::InterruptSource for Timer {
+    fn interrupted(&mut self, ctx : &mut platform::Context) {
+        self.clear_interrupt();
+    }
+}
+
+fn set_value(va  : ::mem::VirtualAddress, v : u32) {
+    let ptr : *mut u32 = va.0 as *mut u32;
     unsafe {volatile_store(ptr, v);}
 }
+
+// 
+// register
+// 
+
+/*
+fn timer_isr(ctx : & thread::Context) -> Option<thread::Context> {
+    // clear the interrupt
+    clear_interrupt0();
+
+    //return service routine
+    
+    None
+}
+*/

@@ -5,6 +5,7 @@ use core::ops;
 
 use super::cpu;
 use ::mem::FrameAllocator;
+use ::mem::MemorySize;
 
 // contants are auto inlined: https://doc.rust-lang.org/book/const-and-static.html
 pub const PAGE_SHIFT : usize = 12;
@@ -214,7 +215,6 @@ pub struct L2Table {
    pub descriptors : &'static mut [L2TableDescriptor],
 }
 
-
 impl Index<usize> for L1Table {
     type Output = L1TableDescriptor;
 
@@ -242,38 +242,6 @@ impl IndexMut<usize> for L2Table {
     fn index_mut(&mut self, index: usize) -> &mut L2TableDescriptor {
         &mut self.descriptors[index]
     }
-}
-
-impl L1Table {
-
-  pub fn map_page(&mut self, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress)  {
-    let l1Index = v.0 >> MB_SHIFT;
-    
-    if self.descriptors[l1Index].0 == 0 {
-      // allocate a coarse page table
-      // set all the bits required
-      // set the physical address in here
-    }
-
-    
-
-//    let phy = self.descriptors[l1Index].get_physical_address();
-    // find the virtual address to update
-    
-//CC ::mem::VirtualAddress(0)
-  }
-
-  pub fn set(&mut self, v : ::mem::VirtualAddress, desc : L1TableDescriptor) {
-    let l1Index = v.0 >> MB_SHIFT;
-    self.descriptors[l1Index] = desc;
-
-  }
-//    let phy = self.descriptors[l1Index].get_physical_address();
-    // find the virtual address to update
-    
-//CC ::mem::VirtualAddress(0)
-  
-
 }
 
 /*
@@ -313,6 +281,7 @@ fn getInitFrames(fa : & mut ::mem::FrameAllocator) -> [::mem::PhysicalAddress;5]
 }
 
 fn up(a : usize) -> usize {(a + PAGE_MASK) & (!PAGE_MASK)}
+fn down(a : usize) -> usize {a & (!PAGE_MASK)}
 
 // TODO fix frame allocator to not use stub and stack.
 pub fn init_page_table(l1table_identity : ::mem::VirtualAddress, l2table_identity : ::mem::VirtualAddress, ml : &MemLayout, fa : & mut ::mem::FrameAllocator) -> PageTable {
@@ -359,7 +328,7 @@ pub fn init_page_table(l1table_identity : ::mem::VirtualAddress, l2table_identit
         
 
         // map the kernel in the new page table:
-        let kernelSize = up((ml.kernel_end_virt - ml.kernel_start_virt) as usize);
+        let kernelSize = up(::mem::toBytes(ml.kernel_end_virt - ml.kernel_start_virt));
         // mega bytes rounded up
         let nummb = ((kernelSize + MB_MASK) & (!MB_MASK)) >> MB_SHIFT;
 
@@ -474,9 +443,6 @@ impl PageTable {
       self.map_single_descriptor(frameallocator, L2TableDescriptor::new(p), v)
   }
 
-  pub fn map_device(&mut self, frameallocator : & mut ::mem::FrameAllocator, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress) {
-      self.map_single_descriptor(frameallocator, L2TableDescriptor::new_device(p), v)
-  }
 
   // TODO: clear interrupts somewhere here? maybe not
   fn map_single_descriptor(&mut self, frameallocator : & mut ::mem::FrameAllocator, p : L2TableDescriptor, v : ::mem::VirtualAddress) {
@@ -532,11 +498,93 @@ impl PageTable {
 }
 impl ::mem::MemoryMapper for PageTable {
 
-  fn map(&mut self, fa : &mut FrameAllocator, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress, length : usize) {
-    for i in (0 ..length).step_by(PAGE_SIZE) {
-      self.map_single(fa, p.offset(i as isize), v.offset(i as isize));
+  fn map(&mut self, fa : &mut FrameAllocator, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress, size : MemorySize) -> Result<(), ()> {
+    let pages = ::mem::toPages(size).ok().unwrap();
+    for i in 0..pages {
+      self.map_single(fa, p.uoffset(i<<PAGE_SHIFT), v.uoffset(i<<PAGE_SHIFT));
     }
+
+    Ok(())
   }
+
+  fn map_device(&mut self, frameallocator : & mut ::mem::FrameAllocator, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress, size : MemorySize) -> Result<(), ()> {
+    let pages = ::mem::toPages(size).ok().unwrap();
+    for i in 0..pages {
+      self.map_single_descriptor(frameallocator, L2TableDescriptor::new_device(p.uoffset(i<<PAGE_SHIFT)), v.uoffset(i<<PAGE_SHIFT))
+    }
+
+    Ok(())
+  }
+  
+  fn unmap(&mut self, fa : &mut FrameAllocator, v : ::mem::VirtualAddress, size : MemorySize) -> Result<(), ()>{
+    unimplemented!();
+  }
+
+  fn p2v(&mut self, p : ::mem::PhysicalAddress) ->  Option<::mem::VirtualAddress> {
+    let l1table = self.descriptors.descriptors.iter();
+    for (index, l1desc) in l1table.enumerate(){
+      if l1desc.is_present() {
+        continue;
+      }
+
+      let l2phy = l1desc.get_physical_address();
+
+        // TODO!
+      const FREE_INDEX : usize = 5;
+      self.tmpMap[FREE_INDEX] = L2TableDescriptor::new(l2phy);
+
+      cpu::memory_write_barrier();
+      cpu::invalidate_caches();
+      cpu::invalidate_tlb();
+      cpu::data_synchronization_barrier();
+
+      let mapped_address = L1_VIRT_ADDRESS.uoffset(FREE_INDEX*PAGE_SIZE);
+      let l2_for_phy = unsafe{ L2Table::from_virt_address(mapped_address)};
+      for j in 0 .. l2_for_phy.descriptors.len() {
+        if l2_for_phy[j].is_present() {
+          let phy = l2_for_phy.descriptors[j].get_physical_address();
+          if down(p.0) == p.0 {
+            return Some(::mem::VirtualAddress((index << MB_SHIFT) + (j << PAGE_SHIFT)  + (p.0 & PAGE_MASK) ));
+          }
+        }
+      }
+    }
+    None
+  }
+
+  fn v2p(&mut self, v : ::mem::VirtualAddress) ->  Option<::mem::PhysicalAddress> {
+
+    let l1Index = v.0 >> MB_SHIFT;
+    let l1descriptor = &self.descriptors[l1Index];
+    if ! l1descriptor.is_present() {
+      return None;
+    }
+
+    // map the l2 table
+    const FREE_INDEX : usize = 5;
+    self.tmpMap[FREE_INDEX] = L2TableDescriptor::new(l1descriptor.get_physical_address());
+
+    cpu::memory_write_barrier();
+    cpu::invalidate_caches();
+    cpu::invalidate_tlb();
+    cpu::data_synchronization_barrier();
+
+    let mapped_address = L1_VIRT_ADDRESS.uoffset(FREE_INDEX << PAGE_SHIFT);
+    // frame now available here:
+    let mut l2_for_phy = unsafe{ L2Table::from_virt_address(mapped_address)};
+
+    let l2Index = (v.0 >> PAGE_SHIFT) & 0xFF;
+    let l2descriptor = &l2_for_phy.descriptors[l2Index];
+    if ! l2descriptor.is_present() {
+      return None;
+    }
+
+    let p = ::mem::PhysicalAddress(l2descriptor.get_physical_address().0 | (v.0 & PAGE_MASK));
+
+    Some(p)
+  }
+
+
 
 }
 

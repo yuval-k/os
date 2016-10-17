@@ -2,13 +2,9 @@
 use kernel_alloc;
 use collections::Vec;
 use collections::boxed::Box;
+use super::platform;
 
-// TODO remove this for something generic..
-use ::arch::arm::vector;
-
-// TODO make generic
-type C = ::arch::arm::vector::Context;
-
+type C = super::platform::Context;
 
 pub struct Thread{
     pub ctx: C,
@@ -45,7 +41,7 @@ impl Sched {
         // threads.map()
     }
 
-    pub fn schedule(&mut self, ctx : & vector::Context) -> C {
+    pub fn schedule(&mut self, ctx : & C) -> C {
         self.threads[self.curr_thread_index].ctx = *ctx;
         // find an eligble thread
         // threads.map()
@@ -73,7 +69,7 @@ impl Sched {
         
         // save the context, and go go go
         // pc needs to be after save context
-        vector::switchContext(&mut self.threads[curr_thread].ctx, &newContext);
+        platform::switchContext(&mut self.threads[curr_thread].ctx, &newContext);
         // can't use curr_thread.ctx from here on, as it might died during context switch
 
         // we don't get here :)

@@ -1,9 +1,36 @@
 use core::ops::Sub;
-use core::cmp;
 
-#[derive(Copy, Clone)]
+pub enum MemorySize {
+    Bytes(usize),
+    KiloBytes(usize),
+    MegaBytes(usize),
+    GigaBytes(usize),
+    PageSizes(usize),
+}
+
+pub fn toBytes(x : MemorySize) -> usize {
+    match x {
+        MemorySize::Bytes(b) => b,
+        MemorySize::KiloBytes(k) => k << 10,
+        MemorySize::MegaBytes(m) => m << 20,
+        MemorySize::GigaBytes(g) => g << 30,
+        MemorySize::PageSizes(p) => p << super::platform::PAGE_SHIFT,
+    }
+}
+
+pub fn toPages(x : MemorySize) -> Result<usize, ()> {
+    let b = toBytes(x);
+    if (b & super::platform::PAGE_MASK) != 0 {
+        Err(())
+    } else {
+        Ok(b >> super::platform::PAGE_SHIFT)
+    }
+}
+
+#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
 pub struct VirtualAddress(pub usize);
-#[derive(Copy, Clone)]
+
+#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
 pub struct PhysicalAddress(pub usize);
 
 impl VirtualAddress {
@@ -13,26 +40,6 @@ impl VirtualAddress {
 
     pub fn uoffset(&self, off : usize) -> VirtualAddress {
         VirtualAddress(self.0 + off)
-    }
-}
-
-impl cmp::PartialOrd for PhysicalAddress {
-    fn partial_cmp(&self, other: &PhysicalAddress) -> Option<cmp::Ordering> {
-                Some(self.cmp(other))
-    }
-}
-
-impl cmp::PartialEq for PhysicalAddress {
-    fn eq(&self, other: &PhysicalAddress) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl cmp::Eq for PhysicalAddress {}
-
-impl cmp::Ord for PhysicalAddress {
-    fn cmp(&self, other: &PhysicalAddress) -> cmp::Ordering {
-        self.0.cmp(&other.0)
     }
 }
 
@@ -46,27 +53,42 @@ impl PhysicalAddress {
 }
 
 impl Sub for VirtualAddress {
-    type Output = isize;
+    type Output = MemorySize;
 
-    fn sub(self, _rhs: VirtualAddress) -> isize {
-        (self.0 - _rhs.0) as isize 
+    fn sub(self, _rhs: VirtualAddress) -> MemorySize {
+        MemorySize::Bytes(self.0 - _rhs.0) 
     }
 }
 
 impl Sub for PhysicalAddress {
-    type Output = isize;
+    type Output = MemorySize;
 
-    fn sub(self, _rhs: PhysicalAddress) -> isize {
-        (self.0 - _rhs.0) as isize 
+    fn sub(self, _rhs: PhysicalAddress) -> MemorySize {
+        MemorySize::Bytes(self.0 - _rhs.0)
     }
 }
 
-
 pub trait FrameAllocator {
-    fn allocate(&mut self, number: usize) -> Option<PhysicalAddress>;
-    fn deallocate(&mut self, start : PhysicalAddress, number : usize);
+    fn allocate(&mut self, num_frames: usize) -> Option<PhysicalAddress>;
+    fn deallocate(&mut self, start : PhysicalAddress, num_frames : usize);
 }
 
 pub trait MemoryMapper {
-    fn map(&mut self, fa : &mut FrameAllocator, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress, length : usize);
+    fn map(       &mut self, fa : &mut FrameAllocator, p : PhysicalAddress, v : VirtualAddress, size : MemorySize) -> Result<(), ()>;
+    fn unmap(     &mut self, fa : &mut FrameAllocator, v : VirtualAddress, size : MemorySize) -> Result<(), ()>;
+    fn map_device(&mut self, fa : &mut FrameAllocator, p : PhysicalAddress, v : VirtualAddress, size : MemorySize) -> Result<(), ()>;
+
+    fn v2p(&mut self, v : VirtualAddress)  -> Option<PhysicalAddress>;
+    fn p2v(&mut self, v : PhysicalAddress) -> Option<VirtualAddress>;
+}
+
+
+pub trait MemoryManagaer {
+    fn allocate(&mut self,   v : VirtualAddress, size : MemorySize) -> Result<(), ()>;
+    fn deallocate(&mut self, v : VirtualAddress, size : MemorySize) -> Result<(), ()>;
+}
+
+struct DefaultMemoryManager<F : FrameAllocator, M : MemoryMapper> {
+    memMapper : M,
+    frameAlloc : F
 }
