@@ -1,7 +1,7 @@
 use core::intrinsics::{volatile_load, volatile_store};
 use platform;
 use alloc::rc::Rc;
-use core::cell::RefCell;
+use core::cell::UnsafeCell;
 
 // section 4.9.2 in: http://infocenter.arm.com/help/topic/com.arm.doc.dui0159b/DUI0159B_integratorcp_1_0_ug.pdf
 
@@ -32,12 +32,12 @@ bitflags! {
 pub struct Timer {
     index : usize,
     base : ::mem::VirtualAddress, // this should be mapped to TIMERS_BASE
-    callback : Rc<RefCell<platform::InterruptSource>>
+    callback : Rc<UnsafeCell<platform::InterruptSource>>
 }
 
 
 impl Timer {
-    pub fn new(index : usize, timerbase : ::mem::VirtualAddress, callback : Rc<RefCell<platform::InterruptSource>>) -> Timer {
+    pub fn new(index : usize, timerbase : ::mem::VirtualAddress, callback : Rc<UnsafeCell<platform::InterruptSource>>) -> Timer {
         Timer {
             index : index,
             base : timerbase.uoffset(index * TIMER_BASE_OFFSET),
@@ -65,7 +65,7 @@ impl Timer {
 impl platform::InterruptSource for Timer {
     fn interrupted(&mut self, ctx : &mut platform::Context) {
         self.clear_interrupt();
-        self.callback.borrow_mut().interrupted(ctx);
+        unsafe{(&mut *self.callback.get()).interrupted(ctx);}
     }
 }
 

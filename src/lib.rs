@@ -30,7 +30,7 @@ pub mod platform;
 
 use collections::boxed::Box;
 use alloc::rc::Rc;
-use core::cell::RefCell;
+use core::cell::UnsafeCell;
 
 fn init_heap(mapper : &mut ::mem::MemoryMapper, frameAllocator : &mut ::mem::FrameAllocator) {
     const heap_base : ::mem::VirtualAddress = mem::VirtualAddress(0xf000_0000);
@@ -42,7 +42,7 @@ fn init_heap(mapper : &mut ::mem::MemoryMapper, frameAllocator : &mut ::mem::Fra
 }
 
 pub struct PlatformServices {
-    pub scheduler : Rc<RefCell<self::sched::Sched>>,
+    pub scheduler : Rc<UnsafeCell<self::sched::Sched>>,
     pub arch_services : platform::ArchPlatformServices
 }
 
@@ -50,7 +50,7 @@ pub struct PlatformServices {
 pub fn rust_main<M,F,I>(mut mapper :  M, mut frame_allocator : F, init_platform: I) 
 where M : mem::MemoryMapper,
       F : mem::FrameAllocator,
-      I: Fn(&mut M, &mut F, Rc<RefCell<platform::InterruptSource>>) -> platform::ArchPlatformServices {
+      I: Fn(&mut M, &mut F, Rc<UnsafeCell<platform::InterruptSource>>) -> platform::ArchPlatformServices {
     init_heap(&mut mapper, &mut frame_allocator);
 
     let t : sched::Thread = sched::Thread{
@@ -60,7 +60,7 @@ where M : mem::MemoryMapper,
         }
     };
     // init scheduler
-    let sched = Rc::new(RefCell::new(sched::Sched::new(Box::new(t))));
+    let sched = Rc::new(UnsafeCell::new(sched::Sched::new(Box::new(t))));
 
     let arch_platform_services = init_platform(&mut mapper, &mut frame_allocator, sched.clone());
 
@@ -91,10 +91,10 @@ where M : mem::MemoryMapper,
 
     // TODO wrap in safe methods.
     
-    platform_services.scheduler.borrow_mut().spawn_thread(t1);
+    unsafe { (&mut *platform_services.scheduler.get()).spawn_thread(t1); }
 
     loop {
-     //   platform_services.scheduler.borrow_mut().yield_thread();
+        unsafe{ (&mut *platform_services.scheduler.get()).yield_thread(); }
     }
     
 

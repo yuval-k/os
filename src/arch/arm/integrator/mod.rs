@@ -11,7 +11,7 @@ use super::thread;
 
 use collections::boxed::Box;
 use alloc::rc::Rc;
-use core::cell::RefCell;
+use core::cell::UnsafeCell;
 
 use mem::MemoryMapper;
 use platform;
@@ -70,7 +70,7 @@ pub struct PlatformServices {
 }
 
 // This function should be called when we have a heap and a scheduler.
-pub fn init_integrator(mapper : &mut ::mem::MemoryMapper, sched_intr : Rc<RefCell<platform::InterruptSource>>) -> PlatformServices{
+pub fn init_integrator(mapper : &mut ::mem::MemoryMapper, sched_intr : Rc<UnsafeCell<platform::InterruptSource>>) -> PlatformServices{
 
     let mut pic_ = Box::new(pic::PIC::new(mapper.p2v(pic::PIC_BASE_PADDR).unwrap()));
 

@@ -17,6 +17,7 @@ pub struct Thread{
     */
 }
  // TODO: make this Thread and SMP safe.
+ // TODO this is the one mega unsafe class, so it needs to take care of it's on safety.
 pub struct Sched {
     threads: Vec<Box<Thread>>,
     curr_thread_index: usize,
