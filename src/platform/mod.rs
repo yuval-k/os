@@ -5,7 +5,12 @@ pub use ::arch::arm::cpu::set_interrupts;
 pub use ::arch::arm::cpu::get_interrupts;
 
 #[cfg(target_arch = "arm")]
+pub use ::arch::arm::cpu::wait_for_interrupts;
+
+#[cfg(target_arch = "arm")]
 pub type Context = ::arch::arm::thread::Context;
+#[cfg(target_arch = "arm")]
+pub use ::arch::arm::thread::newThread;
 
 #[cfg(target_arch = "arm")]
 pub use ::arch::arm::thread::switchContext;

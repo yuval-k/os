@@ -53,14 +53,8 @@ where M : mem::MemoryMapper,
       I: Fn(&mut M, &mut F, Rc<UnsafeCell<platform::InterruptSource>>) -> platform::ArchPlatformServices {
     init_heap(&mut mapper, &mut frame_allocator);
 
-    let t : sched::Thread = sched::Thread{
-        ctx : platform::Context {
-            // TODO make this cross platform
-            r0:0,r1:0,r2:0,r3:0,r4:0,r5:0,r6:0,r7:0,r8:0,r9:0,r10:0,r11:0,r12:0,sp:0,lr:0,pc:0,cpsr:0
-        }
-    };
     // init scheduler
-    let sched = Rc::new(UnsafeCell::new(sched::Sched::new(Box::new(t))));
+    let sched = Rc::new(UnsafeCell::new(sched::Sched::new()));
 
     let arch_platform_services = init_platform(&mut mapper, &mut frame_allocator, sched.clone());
 
@@ -82,16 +76,13 @@ where M : mem::MemoryMapper,
     let pa = frame_allocator.allocate(1).unwrap();
     mapper.map(&mut frame_allocator, pa, STACK2, mem::MemorySize::PageSizes(1));
 
+    // TODO wrap in safe methods.    
+    unsafe { (&mut *platform_services.scheduler.get()).spawn_thread(STACK2.uoffset(platform::PAGE_SIZE), mem::VirtualAddress(t1 as usize), 0); }
 
-    let t1 : sched::Thread = sched::Thread{
-    ctx : platform::Context {
-        r0:0,r1:0,r2:0,r3:0,r4:0,r5:0,r6:0,r7:0,r8:0,r9:0,r10:0,r11:0,r12:0,sp:STACK2.uoffset(platform::PAGE_SIZE).0 as u32,lr:0,pc:t1 as u32,cpsr: arch::arm::cpu::get_cpsr()
-    }
-    };
+    // to do: 
+    // create idle thread with lowest priority, that just does wait_for_interurpts
+    // create isr thread with highest priority that responds to interrupts. (need semaphore for that..)
 
-    // TODO wrap in safe methods.
-    
-    unsafe { (&mut *platform_services.scheduler.get()).spawn_thread(t1); }
 
     loop {
         unsafe{ (&mut *platform_services.scheduler.get()).yield_thread(); }

@@ -211,6 +211,12 @@ pub fn enable_interrupts() {
     }
 }
 
+pub fn wait_for_interrupts() {
+    unsafe {
+      asm!("mcr p15, 0, $0, c7, c0, 4"::"r"(0)::"volatile")
+    }
+}
+
 pub fn set_interrupts(b : bool) {
     if b {
       enable_interrupts();

@@ -6,8 +6,9 @@ use super::platform;
 
 type C = super::platform::Context;
 
-pub struct Thread{
-    pub ctx: C,
+struct Thread{
+    ctx: C,
+    ready: bool,
     // TODO:
     /*
     wake_on: u32,
@@ -25,18 +26,26 @@ pub struct Sched {
 
 impl Sched {
 
-    pub fn new(cur : Box<Thread>) -> Sched {
+    pub fn new() -> Sched {
         Sched {
-            threads : vec![cur],
+            // fake thread as this main thread..
+            threads : vec![Box::new(Thread{
+                ctx:platform::newThread(::mem::VirtualAddress(0),::mem::VirtualAddress(0),0),
+                ready: true,
+                }
+                )],
             curr_thread_index : 0
         }
     }
 
-    pub fn spawn_thread(&mut self, thr : Thread) {
+    pub fn spawn_thread(&mut self, stack : ::mem::VirtualAddress, start : ::mem::VirtualAddress, arg : usize) {
         // TODO thread safety and SMP Support
         
 
-        let t = Box::new(thr);
+        let t = Box::new(Thread{
+                ctx:platform::newThread(stack, start, arg),
+                ready: true,
+        });
         self.threads.push(t);
         // find an eligble thread
         // threads.map()
@@ -52,12 +61,22 @@ impl Sched {
     fn schedule_new(&mut self) -> C {
         // find an eligble thread
         // threads.map()
-        self.curr_thread_index += 1;
-        // TODO linker with libgcc/compiler_rt so we can have division and mod
-        if self.curr_thread_index == self.threads.len() {
-            self.curr_thread_index = 0;
+        loop {
+            for i in 0 .. self.threads.len() {
+                self.curr_thread_index += 1;
+                // TODO linker with libgcc/compiler_rt so we can have division and mod
+                if self.curr_thread_index == self.threads.len() {
+                    self.curr_thread_index = 0;
+                }
+
+                if self.threads[self.curr_thread_index].ready {
+                    return self.threads[self.curr_thread_index].ctx;
+                }
+            }
+            // no thread is ready.. time to sleep sleep...
+            // return to the main thread.
+            // don't wait for interrupts here, as we might already be in an interrupt..
         }
-        return self.threads[self.curr_thread_index].ctx;
     }
 
     pub fn yield_thread(&mut self) {
@@ -68,12 +87,15 @@ impl Sched {
         // current thread <- thread
         // enable interrupts + unmutex
         
-        // save the context, and go go go
-        // pc needs to be after save context
-        platform::switchContext(&mut self.threads[curr_thread].ctx, &newContext);
-        // can't use curr_thread.ctx from here on, as it might died during context switch
+        if curr_thread != self.curr_thread_index {
+            // save the context, and go go go
+            // pc needs to be after save context
+            platform::switchContext(&mut self.threads[curr_thread].ctx, &newContext);
+            // can't use curr_thread.ctx from here on, as it might died during context switch
 
-        // we don't get here :)
+            // we don't get here :)
+
+        }
     }
 
     // TODO
