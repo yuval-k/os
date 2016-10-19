@@ -4,10 +4,6 @@ SECTIONS
 {
 	. = 0x1000;
 	_physical_begin = . ;
-/*	TODO move stub stuff to stub section .stub:
-    and have the kernel be in a virtual address
- */
-
 	_begin =  . ;
     _stub_begin = .;
 

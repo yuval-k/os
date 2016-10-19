@@ -51,11 +51,6 @@ impl PIC {
             vbase : vbase,
             callback : None,
         }
-        // register at vector table
-    // assume mmio is already mapped, and just find it's address.  pageTable.map_device(&mut frameAllocator, pic::PIC_BASE_PADDR, pic::PIC_BASE_VADDR);
-    // do it outside in init
-        // TODO vector::get_vec_table().register_irq(interrupt_happened);
-
     }
 
     pub fn add_timer_callback(&mut self, callback : Box<platform::InterruptSource> ) {

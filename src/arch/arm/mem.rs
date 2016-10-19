@@ -32,6 +32,7 @@ pub struct LameFrameAllocator<'a> {
 
 impl<'a> ::mem::FrameAllocator for LameFrameAllocator<'a> {
 
+  // assume no interrupts here.
     fn allocate(&mut self, number: usize) -> Option<::mem::PhysicalAddress> {
         if self.nextfree >= self.max {
             return None;
@@ -112,8 +113,8 @@ pub struct L1TableDescriptor(u32);
 pub struct FirstLevelTableDescriptor(u32);
 
 // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0333h/Babifihd.html
-const L2_CACHEABLE : u32 = 1 << 2;
-const L2_BUFFERABLE : u32 = 1 << 2;
+const CACHEABLE : u32 = 1 << 3;
+const BUFFERABLE : u32 = 1 << 2;
 const L2_SHAREABLE  : u32 = 1 << 10;
 
 const L2_NX  : u32 = 1;
@@ -122,6 +123,7 @@ const L2_XPAGE_TYPE  : u32 = 1 << 1;
 // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0211k/Caceaije.html
 // read write all:
 const L2_AP_ALL_ACCESS  : u32 = 0b11 << 4;
+const L1_AP_ALL_ACCESS  : u32 = 0b11 << 10;
 
 // where we gonna map the virt table itself
 const L1_VIRT_ADDRESS :  ::mem::VirtualAddress = ::mem::VirtualAddress(0xe000_0000);
@@ -141,15 +143,44 @@ impl L1TableDescriptor {
         d.0 |= physical_address_of_l2.0 as u32;
 
         d
+    }    
+    
+    fn new_section(section_addr: ::mem::PhysicalAddress, cachable: bool) -> L1TableDescriptor {
+
+      if section_addr.0 & MB_MASK != 0 {
+        panic!("Can't map unaligned sections")
+      }
+
+        let mut d : L1TableDescriptor = L1TableDescriptor(0);
+        // 1MB section
+        d.0 |= 0b10;
+
+        if cachable {
+          d.0 |= CACHEABLE;
+          d.0 |= BUFFERABLE;
+        }
+
+        d.0 |= L1_AP_ALL_ACCESS;
+
+        d.0 |= section_addr.0 as u32;
+
+        d
     }
 
   fn is_present(&self) -> bool {
       self.0 != 0
   }
 
+  fn is_section(&self) -> bool {
+      self.0 & 0b11 == 0b10
+  }
+
   fn get_physical_address(&self) -> ::mem::PhysicalAddress {
     if ! self.is_present() {
       panic!("entry not present!")
+    }
+    if self.is_section() {
+      return ::mem::PhysicalAddress((self.0 as usize)& (!MB_MASK));
     }
     ::mem::PhysicalAddress((self.0 as usize)& (!PAGE_MASK))
   }
@@ -164,8 +195,8 @@ impl L2TableDescriptor {
       let mut d : L2TableDescriptor = L2TableDescriptor(0);
       // 4kb page
       d.0 |= L2_XPAGE_TYPE;
-      d.0 |= L2_CACHEABLE;
-      d.0 |= L2_BUFFERABLE;
+      d.0 |= CACHEABLE;
+      d.0 |= BUFFERABLE;
       d.0 |= L2_AP_ALL_ACCESS;
 
       // Only one cpu now.. no need to set shareable
@@ -282,6 +313,10 @@ fn getInitFrames(fa : & mut ::mem::FrameAllocator) -> [::mem::PhysicalAddress;5]
 
 fn up(a : usize) -> usize {(a + PAGE_MASK) & (!PAGE_MASK)}
 fn down(a : usize) -> usize {a & (!PAGE_MASK)}
+
+fn mb_up(a : usize) -> usize {(a + MB_MASK) & (!MB_MASK)}
+fn mb_down(a : usize) -> usize {a & (!MB_MASK)}
+
 
 // TODO fix frame allocator to not use stub and stack.
 pub fn init_page_table(l1table_identity : ::mem::VirtualAddress, l2table_identity : ::mem::VirtualAddress, ml : &MemLayout, fa : & mut ::mem::FrameAllocator) -> PageTable {
@@ -443,8 +478,6 @@ impl PageTable {
       self.map_single_descriptor(frameallocator, L2TableDescriptor::new(p), v)
   }
 
-
-  // TODO: clear interrupts somewhere here? maybe not
   fn map_single_descriptor(&mut self, frameallocator : & mut ::mem::FrameAllocator, p : L2TableDescriptor, v : ::mem::VirtualAddress) {
     
     let l1Index = v.0 >> MB_SHIFT;
@@ -510,8 +543,33 @@ impl ::mem::MemoryMapper for PageTable {
 // TODO add 1mb section; to help speed up things up!
   fn map_device(&mut self, frameallocator : & mut ::mem::FrameAllocator, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress, size : MemorySize) -> Result<(), ()> {
     let pages = ::mem::toPages(size).ok().unwrap();
-    for i in 0..pages {
-      self.map_single_descriptor(frameallocator, L2TableDescriptor::new_device(p.uoffset(i<<PAGE_SHIFT)), v.uoffset(i<<PAGE_SHIFT))
+    let bytes = ::mem::toBytes(size);
+    let endPhysical = p.uoffset(pages << PAGE_SHIFT);
+
+    let bytesBeforeMb = mb_up(p.0) - p.0;
+    let bytesAfterMb = endPhysical.0 - mb_down(endPhysical.0);
+    let bytesMb = bytes - bytesAfterMb - bytesBeforeMb;
+
+    let pagesBeforeMb = bytesBeforeMb >> PAGE_SHIFT;
+    let Mbs = bytes >> MB_SHIFT;
+    let pagesAfterMb = bytesAfterMb >> PAGE_SHIFT;
+
+    let mut currOffset : usize = 0;
+
+    for i in 0..pagesBeforeMb {
+      self.map_single_descriptor(frameallocator, L2TableDescriptor::new_device(p.uoffset(currOffset)), v.uoffset(currOffset));
+      currOffset += PAGE_SIZE;
+    }
+
+    for i in 0..Mbs {
+      let l1Index = v.uoffset(currOffset).0 >> MB_SHIFT;
+      self.descriptors[l1Index] = L1TableDescriptor::new_section(p.uoffset(currOffset), false);
+      currOffset += MB_SIZE;
+    }
+
+    for i in 0..pagesAfterMb {
+      self.map_single_descriptor(frameallocator, L2TableDescriptor::new_device(p.uoffset(currOffset)), v.uoffset(currOffset));
+      currOffset += PAGE_SIZE;
     }
 
     Ok(())
@@ -527,6 +585,16 @@ impl ::mem::MemoryMapper for PageTable {
       if !l1desc.is_present() {
         continue;
       }
+
+      if l1desc.is_section() {
+        let phy_mb = l1desc.get_physical_address();
+          if mb_down(p.0) == phy_mb.0 {
+            return Some(::mem::VirtualAddress((index << MB_SHIFT) + (p.0 & MB_MASK) ));
+          }
+          continue;
+      }
+
+      // not a section..
 
       let l2phy = l1desc.get_physical_address();
 
@@ -560,6 +628,13 @@ impl ::mem::MemoryMapper for PageTable {
     if ! l1descriptor.is_present() {
       return None;
     }
+
+    if l1descriptor.is_section() {
+      let phy_mb = l1descriptor.get_physical_address();
+      let p = ::mem::PhysicalAddress(phy_mb.0 | (v.0 & MB_MASK));
+      return Some(p);
+    }
+
 
     // map the l2 table
     const FREE_INDEX : usize = 5;

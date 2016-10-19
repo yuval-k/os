@@ -71,7 +71,6 @@ where M : mem::MemoryMapper,
     platform::set_interrupts(true);
 
     // init our thread:
-
     const STACK2 : ::mem::VirtualAddress = ::mem::VirtualAddress(0xDD00_0000);
     let pa = frame_allocator.allocate(1).unwrap();
     mapper.map(&mut frame_allocator, pa, STACK2, mem::MemorySize::PageSizes(1));

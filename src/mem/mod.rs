@@ -1,5 +1,6 @@
 use core::ops::Sub;
 
+#[derive(Copy, Clone, Debug)]
 pub enum MemorySize {
     Bytes(usize),
     KiloBytes(usize),
