@@ -12,9 +12,8 @@
 
 #[macro_use]
 extern crate collections;
-
 extern crate alloc;
-
+extern crate spin;
 extern crate rlibc;
 extern crate kernel_alloc;
 

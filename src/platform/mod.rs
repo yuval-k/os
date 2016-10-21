@@ -1,30 +1,12 @@
-#[cfg(target_arch = "arm")]
-pub use ::arch::arm::cpu::set_interrupts;
+pub mod intr;
 
 #[cfg(target_arch = "arm")]
-pub use ::arch::arm::cpu::get_interrupts;
-
+mod arm;
 #[cfg(target_arch = "arm")]
-pub use ::arch::arm::cpu::wait_for_interrupts;
-
-#[cfg(target_arch = "arm")]
-pub type Context = ::arch::arm::thread::Context;
-#[cfg(target_arch = "arm")]
-pub use ::arch::arm::thread::newThread;
-
-#[cfg(target_arch = "arm")]
-pub use ::arch::arm::thread::switchContext;
-
-#[cfg(target_arch = "arm")]
-pub use ::arch::arm::mem::PAGE_SHIFT;
-
-#[cfg(target_arch = "arm")]
-pub type ArchPlatformServices = ::arch::arm::PlatformServices;
+pub use self::arm::*;
 
 pub const PAGE_SIZE : usize = 1<<PAGE_SHIFT;
 pub const PAGE_MASK : usize = PAGE_SIZE - 1;
-
-mod intr;
 
 pub trait InterruptSource {
     fn interrupted(&mut self, &mut Context);

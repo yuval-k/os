@@ -12,8 +12,8 @@ pub const SYS_MODE : u32 = 0b11111;
 
 pub const MODE_MASK : u32 = 0b11111;
 
-const DISABLE_FIQ : u32 = 1 << 6;
-const DISABLE_IRQ : u32 = 1 << 7;
+pub const DISABLE_FIQ : u32 = 1 << 6;
+pub const DISABLE_IRQ : u32 = 1 << 7;
 
 
 // #[inline(always)] -> cause these might be used in the stub (the rest of program code will be mapped later)
@@ -211,9 +211,13 @@ pub fn enable_interrupts() {
     }
 }
 
+#[naked]
 pub fn wait_for_interrupts() {
     unsafe {
-      asm!("mcr p15, 0, $0, c7, c0, 4"::"r"(0)::"volatile")
+      asm!("loop:
+            mcr p15, 0, $0, c7, c0, 4
+            b loop
+            "::"r"(0)::"volatile")
     }
 }
 

@@ -59,12 +59,13 @@ pub extern "C" fn switchContext(currentContext : &mut Context, newContext  : &Co
     asm!("mov r0, $0
           mov r1, $1 
           /* save to r1, restore from r0 */
-          /* store regs in the stack - cause we can! */
+          /* store non scratch regs in the stack - cause we can! */
           stmfd sp!, {r4-r12,r14}
           /* place leavefunc as pc and sp and cspr in save context */
           adr r2, leavefunc
           str r2, [r1, $2]
           mrs r3, cpsr
+
           str r3, [r1, $3]
           /* store sp */
           str sp, [r1, $5]
@@ -79,7 +80,7 @@ pub extern "C" fn switchContext(currentContext : &mut Context, newContext  : &Co
           /* can't have LR here, see docs: http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0204j/Cihcadda.html */
           ldm r0, {r0-r13,r15}^
 
-          /* context switched back; sp and pc should be correctly set for us, restore all the rest from the stack. */
+          /* context switched back; sp, pc and cspr should be correctly set for us, restore all the rest from the stack. */
           leavefunc:
 
           ldmfd sp!, {r4-r12,r14}
@@ -88,7 +89,8 @@ pub extern "C" fn switchContext(currentContext : &mut Context, newContext  : &Co
         "i"( PC_OFFSET ) , 
         "i"( CPSR_OFFSET ), 
         "i"( LR_OFFSET ),
-        "i"( SP_OFFSET ) :  : "volatile");
+        "i"( SP_OFFSET )
+        :  : "volatile");
     }
 
 }

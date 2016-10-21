@@ -6,6 +6,7 @@ authors = ["Kohavi, Yuval <yuval.kohavi@gmail.com>"]
 [dependencies]
 rlibc = "1.0.0"
 bitflags = "0.7.0"
+spin = "0.4.4"
 
 [dependencies.kernel_alloc]
 path = "lib/kernel_alloc"

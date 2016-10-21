@@ -5,14 +5,37 @@ use core::ops::{Drop, Deref, DerefMut};
 use super::get_interrupts;
 use super::set_interrupts;
 
-struct InterruptGuard<T: ?Sized> {
 
-    data: UnsafeCell<T>,
+pub fn no_interrupts() -> InterruptGuardOneShot {
+    let old_state = get_interrupts();
+    set_interrupts(false);
+
+    InterruptGuardOneShot
+    {
+        to_state: old_state,
+    }
+}
+
+pub struct InterruptGuardOneShot {
+    to_state : bool,
+}
+
+impl Drop for InterruptGuardOneShot
+{
+    fn drop(&mut self)
+    {
+        set_interrupts(self.to_state);
+    }
 }
 
 
 
-struct InterruptGuardHelper<'a, T: ?Sized + 'a> {
+pub struct InterruptGuard<T: ?Sized> {
+
+    data: UnsafeCell<T>,
+}
+
+pub struct InterruptGuardHelper<'a, T: ?Sized + 'a> {
 
     to_state : bool,
     data: &'a mut T,
@@ -25,7 +48,7 @@ unsafe impl<T: ?Sized + Send> Send for InterruptGuard<T> {}
 impl<T> InterruptGuard<T>
 {
 
-    pub fn new<'a>(user_data: T,  get_int : fn() -> bool, set_int : fn(bool) ) -> InterruptGuard<T>
+    pub fn new<'a>(user_data: T) -> InterruptGuard<T>
     {
         InterruptGuard
         {
