@@ -6,6 +6,8 @@ use collections::boxed::Box;
 use core::cell::RefCell;
 use core::cell::Cell;
 use super::platform;
+use alloc::boxed::FnBox;
+
 
 type C = super::platform::Context;
 
@@ -36,17 +38,25 @@ pub struct Sched {
 const IDLE_THREAD_ID :  ThreadId = ThreadId(0);
 const MAIN_THREAD_ID :  ThreadId = ThreadId(1);
 
+extern "C" fn thread_start(start: *mut Box<FnBox()> ){
+    unsafe{
+        let f : Box< Box<FnBox()> > = Box::from_raw(start);
+        f ();
+    }
+}
+
 impl Sched {
 
     pub fn new() -> Sched {
         Sched {
             // fake thread as this main thread..
-            threads : RefCell::new(vec![Box::new(Thread{
-                                    ctx : platform::newThread(::mem::VirtualAddress(0),::mem::VirtualAddress(0),0),
-                                    ready: true,
-                                    id : MAIN_THREAD_ID,
-                },
-                )]),
+            threads : RefCell::new(vec![Box::new(
+                Thread{
+                    ctx : platform::newThread(::mem::VirtualAddress(0),::mem::VirtualAddress(0),0),
+                    ready: true,
+                    id : MAIN_THREAD_ID,
+                })
+                ]),
             idle_thread: Thread{
                 ctx : platform::newThread(::mem::VirtualAddress(0), ::mem::VirtualAddress(platform::wait_for_interrupts as usize), 0),
                 ready: true,
@@ -57,22 +67,34 @@ impl Sched {
         }
     }
 
+    pub fn spawn<F>(& self,stack : ::mem::VirtualAddress, f: F) 
+     where F: FnOnce() , F: Send + 'static {
+         let p : Box<FnBox()> = Box::new(f);
+         let ptr = Box::into_raw(Box::new(p)) as *const usize as usize; // some reson without another box ptr is 1
+         self.spawn_thread(stack, ::mem::VirtualAddress(thread_start as usize), ptr);
+    }
+
     pub fn spawn_thread(& self, stack : ::mem::VirtualAddress, start : ::mem::VirtualAddress, arg : usize) {
         // TODO thread safety and SMP Support
         self.thread_id_counter.set(self.thread_id_counter.get() + 1);
 
         let t = Box::new(Thread{
-                ctx:platform::newThread(stack, start, arg),
-                ready: true,
+                ctx : platform::newThread(stack, start, arg),
+                ready : true,
                 id : ThreadId(self.thread_id_counter.get()),
         });
+
+        let ig = platform::intr::no_interrupts();
         self.threads.borrow_mut().push(t);
         // find an eligble thread
         // threads.map()
     }
 
-    pub fn schedule(& self, ctx : & C) -> C {
-        self.threads.borrow_mut()[self.curr_thread_index.get()].ctx = *ctx;
+    // no interrupts here..
+    pub fn schedule(& self, old_ctx : & C) -> C {
+        {
+            self.threads.borrow_mut()[self.curr_thread_index.get()].ctx = *old_ctx;
+        }
         // find an eligble thread
         // threads.map()
         return self.schedule_new();
@@ -115,14 +137,19 @@ impl Sched {
         if curr_thread != self.curr_thread_index.get() {
             // save the context, and go go go
             // pc needs to be after save context
-            platform::switchContext(&mut self.threads.borrow_mut()[curr_thread].ctx, &newContext);
+            // use unsafe cell as the we have a context switch.
+            let threads = unsafe{ &mut *self.threads.as_ptr() };
+            let ctx =&mut (threads[curr_thread].ctx);
+            platform::switchContext(ctx, &newContext);
             // we don't get here :)
         }
     }
 
     // assume interrupts are blocked
     pub fn block(& self) {
-        self.threads.borrow_mut()[self.curr_thread_index.get()].ready = false;
+        {
+            self.threads.borrow_mut()[self.curr_thread_index.get()].ready = false;
+        }
         self.yeild_thread_internal();
     }
 
@@ -137,11 +164,9 @@ impl Sched {
 
     // TODO
     pub fn lock(&mut self) {
-        
     }
 
     pub fn unlock(&mut self) {
-        
     }
 
 }

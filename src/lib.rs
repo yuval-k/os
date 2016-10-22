@@ -10,6 +10,8 @@
 // TODO: delete
 #![feature(drop_types_in_const)]
 
+#![feature(fnbox)]
+
 #[macro_use]
 extern crate collections;
 extern crate alloc;
@@ -68,7 +70,7 @@ where M : mem::MemoryMapper,
     mapper.map(&mut frame_allocator, pa, STACK2, mem::MemorySize::PageSizes(1));
 
     // TODO wrap in safe methods.    
-    platform::get_platform_services().get_scheduler().spawn_thread(STACK2.uoffset(platform::PAGE_SIZE), mem::VirtualAddress(t1 as usize), 0); 
+    platform::get_platform_services().get_scheduler().spawn(STACK2.uoffset(platform::PAGE_SIZE), t1); 
 
     // to do: 
     // create idle thread with lowest priority, that just does wait_for_interurpts
@@ -110,6 +112,7 @@ extern fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
 
 
 fn t1() {
-loop{
-}
+    loop {
+
+    }
 }
