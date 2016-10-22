@@ -93,7 +93,7 @@ pub struct PlatformServices {
 
 // This function should be called when we have a heap and a scheduler.
 pub fn init_integrator(mapper: &mut ::mem::MemoryMapper,
-                       sched_intr: Rc<UnsafeCell<platform::InterruptSource>>)
+                       sched_intr: Rc<platform::InterruptSource>)
                        -> PlatformServices {
 
     let mut pic_ = Box::new(pic::PIC::new(mapper.p2v(pic::PIC_BASE_PADDR).unwrap()));

@@ -55,7 +55,7 @@ pub fn arm_main<T : ::mem::FrameAllocator>(mut mapper : self::mem::PageTable, mu
 
     // undefined instruction to test
  //   unsafe{asm!(".word 0xffffffff" :: :: "volatile");}
-    let initplat = |mm : &mut self::mem::PageTable, fa : &mut T, sched_intr : Rc<UnsafeCell<platform::InterruptSource>> | {
+    let initplat = |mm : &mut self::mem::PageTable, fa : &mut T, sched_intr : Rc<platform::InterruptSource> | {
         
         let board_services = self::integrator::init_integrator(mm as &mut MemoryMapper, sched_intr);
 

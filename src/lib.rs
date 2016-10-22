@@ -40,31 +40,24 @@ fn init_heap(mapper : &mut ::mem::MemoryMapper, frameAllocator : &mut ::mem::Fra
 
 }
 
-pub struct PlatformServices {
-    pub scheduler : Rc<UnsafeCell<self::sched::Sched>>,
-    pub arch_services : platform::ArchPlatformServices
-}
-
-
 pub fn rust_main<M,F,I>(mut mapper :  M, mut frame_allocator : F, init_platform: I) 
 where M : mem::MemoryMapper,
       F : mem::FrameAllocator,
-      I: Fn(&mut M, &mut F, Rc<UnsafeCell<platform::InterruptSource>>) -> platform::ArchPlatformServices {
+      I: Fn(&mut M, &mut F, Rc<platform::InterruptSource>) -> platform::ArchPlatformServices {
     init_heap(&mut mapper, &mut frame_allocator);
 
     // init scheduler
-    let sched = Rc::new(UnsafeCell::new(sched::Sched::new()));
-
+    let sched =  Rc::new(sched::Sched::new());
     let arch_platform_services = init_platform(&mut mapper, &mut frame_allocator, sched.clone());
+
+    platform::set_platform_services(platform::PlatformServices {
+        scheduler : sched,
+        arch_services : arch_platform_services
+    });
 
     // enable interrupts!
     platform::set_interrupts(true);
     
-
-    let mut platform_services = PlatformServices {
-        scheduler : sched,
-        arch_services : arch_platform_services
-    };
 
     // time to enable interrupts
     platform::set_interrupts(true);
@@ -75,7 +68,7 @@ where M : mem::MemoryMapper,
     mapper.map(&mut frame_allocator, pa, STACK2, mem::MemorySize::PageSizes(1));
 
     // TODO wrap in safe methods.    
-    unsafe { (&mut *platform_services.scheduler.get()).spawn_thread(STACK2.uoffset(platform::PAGE_SIZE), mem::VirtualAddress(t1 as usize), 0); }
+    platform::get_platform_services().get_scheduler().spawn_thread(STACK2.uoffset(platform::PAGE_SIZE), mem::VirtualAddress(t1 as usize), 0); 
 
     // to do: 
     // create idle thread with lowest priority, that just does wait_for_interurpts
@@ -83,7 +76,7 @@ where M : mem::MemoryMapper,
 
 
     loop {
-        unsafe{ (&mut *platform_services.scheduler.get()).yield_thread(); }
+        platform::get_platform_services().get_scheduler().yield_thread();
     }
     
 
