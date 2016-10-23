@@ -10,7 +10,7 @@ use platform;
 
 use ::mem::MemoryMapper;
 
-pub fn build_mode_stacks<T : ::mem::FrameAllocator>(mapper : &mut ::mem::MemoryMapper, mut frame_allocator : &mut T) {
+pub fn build_mode_stacks(mapper : &mut ::mem::MemoryMapper, mut frame_allocator : &mut ::mem::FrameAllocator) {
 
     const STACK_BASE : ::mem::VirtualAddress = ::mem::VirtualAddress(0xb000_0000);
     const NUM_PAGES : usize = 1;
@@ -28,17 +28,21 @@ pub fn build_mode_stacks<T : ::mem::FrameAllocator>(mapper : &mut ::mem::MemoryM
     }
 }
 
+fn init_vectors(mapper : &mut ::mem::MemoryMapper, mut frame_allocator : &mut ::mem::FrameAllocator) {
+    mapper.map(frame_allocator,
+               ::mem::PhysicalAddress(0),
+               vector::VECTORS_ADDR,
+               ::mem::MemorySize::PageSizes(1)).unwrap();
+    vector::init_interrupts();
+    build_mode_stacks(mapper, frame_allocator);
+}
+
 pub fn arm_main<T : ::mem::FrameAllocator>(mut mapper : self::mem::PageTable, mut frame_allocator : T) -> !{
     // init intr and build mode stacks
    // TODO: add check if done, and do if not  build_mode_stacks(& mut mapper, &mut frame_allocator);
 
     // init and map vector tables - we don't supposed to have to do this now, but it makes debugging easier..
-    mapper.map(&mut frame_allocator,
-                  ::mem::PhysicalAddress(0),
-                  vector::VECTORS_ADDR,
-                  ::mem::MemorySize::PageSizes(1)).unwrap();
-    vector::init_interrupts();
-    build_mode_stacks(&mut mapper, &mut frame_allocator);
+    init_vectors(&mut mapper, &mut frame_allocator);
 
   // DONE. install_interrupt_handlers();
   // DONE: init_timer

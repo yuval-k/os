@@ -74,7 +74,7 @@ where M : mem::MemoryMapper,
         let pa = frame_allocator.allocate(1).unwrap();
         mapper.map(&mut frame_allocator, pa, stack2, mem::MemorySize::PageSizes(1)).unwrap();
         platform::get_platform_services().get_scheduler().spawn(stack2.uoffset(platform::PAGE_SIZE), move||{
-            sema.acquire();
+            sema.release();
         }); 
     }
 
@@ -86,6 +86,7 @@ where M : mem::MemoryMapper,
         mapper.map(&mut frame_allocator, pa, stack2, mem::MemorySize::PageSizes(1)).unwrap();
         platform::get_platform_services().get_scheduler().spawn(stack2.uoffset(platform::PAGE_SIZE), move||{
             sema.acquire();
+            loop{}
         }); 
     }
 

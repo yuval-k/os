@@ -93,7 +93,8 @@ impl Sched {
     // no interrupts here..
     pub fn schedule(& self, old_ctx : & C) -> C {
         {
-            self.threads.borrow_mut()[self.curr_thread_index.get()].ctx = *old_ctx;
+            let cur_th = self.curr_thread_index.get();
+            self.threads.borrow_mut()[cur_th].ctx = *old_ctx;
         }
         // find an eligble thread
         // threads.map()
@@ -103,16 +104,19 @@ impl Sched {
     fn schedule_new(& self) -> C {
         // find an eligble thread
         // threads.map()
+        let mut cur_th = self.curr_thread_index.get();
         let num_threads = self.threads.borrow().len();
         for _ in 0 .. num_threads {
-            self.curr_thread_index.set(self.curr_thread_index.get() + 1);
+            cur_th += 1;
             // TODO linker with libgcc/compiler_rt so we can have division and mod
-            if self.curr_thread_index.get() == num_threads {
-                self.curr_thread_index.set(0);
+            if cur_th == num_threads {
+                cur_th = 0;
             }
 
-            if self.threads.borrow()[self.curr_thread_index.get()].ready {
-                return self.threads.borrow()[self.curr_thread_index.get()].ctx;
+            if self.threads.borrow()[cur_th].ready {
+                self.curr_thread_index.set(cur_th);
+                let ctx = self.threads.borrow()[cur_th].ctx;
+                return ctx;
             }
         }
         // no thread is ready.. time to sleep sleep...
@@ -125,7 +129,8 @@ impl Sched {
         // disable interrupts
         let ig = platform::intr::no_interrupts();
         // remove the current thread
-        self.threads.borrow_mut().remove(self.curr_thread_index.get());
+        let cur_th = self.curr_thread_index.get();
+        self.threads.borrow_mut().remove(cur_th);
         let new_context = self.schedule_new();
         // tmp ctx.. we don't really gonna use it...
         let mut c = platform::new_thread(::mem::VirtualAddress(0),::mem::VirtualAddress(0),0);
