@@ -13,6 +13,8 @@ type C = super::platform::Context;
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct ThreadId(pub usize);
 
+const WAKE_NEVER : u64 = 0xFFFFFFFF_FFFFFFFF;
+
 struct Thread {
     ctx: C,
     ready: bool,
@@ -126,7 +128,7 @@ impl Sched {
 
             {
                 let ref mut cur_thread = self.threads.borrow_mut()[cur_th];
-                if cur_thread.wake_on > self.time_since_boot_millies.get() {
+                if (cur_thread.wake_on != WAKE_NEVER) && (cur_thread.wake_on <= self.time_since_boot_millies.get()) {
                     cur_thread.wake_on = 0;
                     cur_thread.ready = true;
                 }
@@ -194,9 +196,11 @@ impl Sched {
     pub fn sleep(&self, millis : u32) {
         // disable interrupts
         let ig = platform::intr::no_interrupts();
-        let cur_th = self.curr_thread_index.get();
-        let ref mut cur_thread = self.threads.borrow_mut()[cur_th];
-        cur_thread.wake_on = self.time_since_boot_millies.get() + (millis as u64);
+        {
+            let cur_th = self.curr_thread_index.get();
+            let ref mut cur_thread = self.threads.borrow_mut()[cur_th];
+            cur_thread.wake_on = self.time_since_boot_millies.get() + (millis as u64);
+        }
 
         self.block_no_intr()
     }
@@ -204,7 +208,11 @@ impl Sched {
     // assume interrupts are blocked
     pub fn block_no_intr(&self) {
         {
-            self.threads.borrow_mut()[self.curr_thread_index.get()].ready = false;
+            let ref mut t = self.threads.borrow_mut()[self.curr_thread_index.get()];
+            t.ready = false;
+            if t.wake_on != 0 {
+                t.wake_on = WAKE_NEVER;
+            }
         }
         self.yeild_thread_no_intr();
     }
@@ -213,6 +221,7 @@ impl Sched {
     pub fn wakeup_no_intr(&self, tid: ThreadId) {
         for t in self.threads.borrow_mut().iter_mut().filter(|x| x.id == tid) {
             // there can only be one..
+            t.wake_on = 0;
             t.ready = true;
             break;
         }

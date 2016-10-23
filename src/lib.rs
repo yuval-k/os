@@ -156,9 +156,14 @@ extern "C" fn eh_personality() {}
 
 #[lang = "panic_fmt"]
 extern "C" fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
+    use collections::String;
+    use core::fmt::Write;
 
-    platform::write_to_console("crash");
-
+    platform::write_to_console("PANIC!");
+    let mut w = String::new();
+    write!(&mut w, "Location: {}:{}; {}", file, line, fmt);
+    platform::write_to_console(&w);
+    
     loop {}
 }
 
