@@ -18,12 +18,12 @@ struct SemaphoreImpl {
 
 impl Semaphore {
 
-    pub fn new() -> Semaphore {
+    pub fn new(count : usize) -> Semaphore {
         Semaphore{
             sema : platform::intr::InterruptGuard::new(
                     SemaphoreImpl {
                     waiting : RefCell::new(VecDeque::new()),
-                    counter : Cell::new(0),
+                    counter : Cell::new(count),
                 }
             )
         }

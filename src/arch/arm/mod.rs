@@ -1,4 +1,6 @@
+
 pub mod integrator;
+
 pub mod vector;
 pub mod mem;
 pub mod cpu;
@@ -9,6 +11,8 @@ use alloc::rc::Rc;
 use platform;
 
 use ::mem::MemoryMapper;
+
+pub use self::integrator::write_to_console;
 
 pub fn build_mode_stacks(mapper : &mut ::mem::MemoryMapper, mut frame_allocator : &mut ::mem::FrameAllocator) {
 

@@ -68,12 +68,19 @@ pub extern "C" fn integrator_main(sp_end_virt: usize,
                          MMIO_VSTART,
                          MMIO_PEND - MMIO_PSTART).unwrap();
 
-    let mut w = &mut serial::Writer::new(page_table.p2v(serial::SERIAL_BASE_PADDR).unwrap());
-    w.writeln("Welcome home!");
+    unsafe {serial_base = page_table.p2v(serial::SERIAL_BASE_PADDR).unwrap()}
+
+    write_to_console("Welcome home!");
 
     ::arch::arm::arm_main(page_table, frame_allocator);
 
     loop {}
+}
+
+static mut serial_base : ::mem::VirtualAddress = ::mem::VirtualAddress(0);
+
+pub fn write_to_console(s : &str) {
+    serial::Writer::new(unsafe{serial_base}).writeln(s);
 }
 
 pub struct PlatformServices {
