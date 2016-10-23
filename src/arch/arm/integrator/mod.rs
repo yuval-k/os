@@ -15,6 +15,8 @@ use platform;
 
 use device::serial::SerialMMIO;
 
+pub const ticks_in_second : usize = 20;
+
 fn up(a: usize) -> ::mem::PhysicalAddress {
     ::mem::PhysicalAddress((a + mem::PAGE_MASK) & (!mem::PAGE_MASK))
 }
@@ -98,9 +100,11 @@ pub fn init_integrator(mapper: &mut ::mem::MemoryMapper,
 
     // start a timer
     let mut tmr =
-        Box::new(timer::Timer::new(0, mapper.p2v(timer::TIMERS_BASE).unwrap(), sched_intr));
+        Box::new(timer::Timer::new(1, mapper.p2v(timer::TIMERS_BASE).unwrap(), sched_intr));
 
-    tmr.start_timer(true);
+    // timer 1 is 1mhz
+    let counter = 1_000_000 / (ticks_in_second as u32);
+    tmr.start_timer(counter, true);
 
 
     pic_.add_timer_callback(tmr);

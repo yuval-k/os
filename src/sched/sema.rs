@@ -69,7 +69,6 @@ impl SemaphoreImpl {
                 .push_back(platform::get_platform_services().get_scheduler().get_current_thread());
             platform::get_platform_services().get_scheduler().block_no_intr();
         }
-
     }
 
     fn release(&self) {

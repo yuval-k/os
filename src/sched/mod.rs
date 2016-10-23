@@ -16,7 +16,9 @@ pub struct ThreadId(pub usize);
 struct Thread {
     ctx: C,
     ready: bool,
-    id: ThreadId, /* TODO:
+    id: ThreadId,
+    wake_on: u64,
+     /* TODO:
                    *
                    * wake_on: u32,
                    * id: u32,
@@ -31,6 +33,7 @@ pub struct Sched {
     idle_thread: Thread,
     curr_thread_index: Cell<usize>,
     thread_id_counter: Cell<usize>,
+    time_since_boot_millies: Cell<u64>,
 }
 
 const IDLE_THREAD_ID: ThreadId = ThreadId(0);
@@ -53,6 +56,7 @@ impl Sched {
                     ctx : platform::new_thread(::mem::VirtualAddress(0),::mem::VirtualAddress(0),0),
                     ready: true,
                     id : MAIN_THREAD_ID,
+                    wake_on: 0,
                 })
                 ]),
             idle_thread: Thread{
@@ -60,9 +64,11 @@ impl Sched {
                     ::mem::VirtualAddress(platform::wait_for_interrupts as usize), 0),
                 ready: true,
                 id : IDLE_THREAD_ID,
+                wake_on: 0,
             },
             curr_thread_index : Cell::new(0),
             thread_id_counter : Cell::new(10),
+            time_since_boot_millies : Cell::new(10),
         }
     }
 
@@ -86,6 +92,7 @@ impl Sched {
             ctx: platform::new_thread(stack, start, arg),
             ready: true,
             id: ThreadId(self.thread_id_counter.get()),
+            wake_on: 0,
         });
 
         let ig = platform::intr::no_interrupts();
@@ -117,9 +124,18 @@ impl Sched {
                 cur_th = 0;
             }
 
-            if self.threads.borrow()[cur_th].ready {
+            {
+                let ref mut cur_thread = self.threads.borrow_mut()[cur_th];
+                if cur_thread.wake_on > self.time_since_boot_millies.get() {
+                    cur_thread.wake_on = 0;
+                    cur_thread.ready = true;
+                }
+            }
+
+            let ref cur_thread = self.threads.borrow()[cur_th];
+            if cur_thread.ready {
                 self.curr_thread_index.set(cur_th);
-                let ctx = self.threads.borrow()[cur_th].ctx;
+                let ctx = cur_thread.ctx;
                 return ctx;
             }
         }
@@ -175,6 +191,16 @@ impl Sched {
         self.block_no_intr()
     }
 
+    pub fn sleep(&self, millis : u32) {
+        // disable interrupts
+        let ig = platform::intr::no_interrupts();
+        let cur_th = self.curr_thread_index.get();
+        let ref mut cur_thread = self.threads.borrow_mut()[cur_th];
+        cur_thread.wake_on = self.time_since_boot_millies.get() + (millis as u64);
+
+        self.block_no_intr()
+    }
+
     // assume interrupts are blocked
     pub fn block_no_intr(&self) {
         {
@@ -204,7 +230,10 @@ impl Sched {
 
 // for the timer interrupt..
 impl platform::InterruptSource for Sched {
+    // this method is called platform::ticks_in_second times a second
     fn interrupted(&self, ctx: &mut platform::Context) {
+        let delta_millis = (1000 / platform::ticks_in_second) as u64; 
+        self.time_since_boot_millies.set(self.time_since_boot_millies.get() + delta_millis);
         *ctx = self.schedule_no_intr(ctx);
     }
 }

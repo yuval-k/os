@@ -14,6 +14,9 @@ use ::mem::MemoryMapper;
 
 pub use self::integrator::write_to_console;
 
+pub use self::integrator::ticks_in_second;
+
+
 pub fn build_mode_stacks(mapper: &mut ::mem::MemoryMapper,
                          mut frame_allocator: &mut ::mem::FrameAllocator) {
 

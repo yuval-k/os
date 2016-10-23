@@ -45,9 +45,9 @@ impl Timer {
         }
     }
 
-    pub fn start_timer(&mut self, intr: bool) {
-        set_value(self.base.uoffset(TIMER_LOAD_OFFSET), 0xffffff);
-        set_value(self.base.uoffset(TIMER_BG_LOAD_OFFSET), 0xffffff);
+    pub fn start_timer(&mut self, counter: u32, intr: bool) {
+        set_value(self.base.uoffset(TIMER_LOAD_OFFSET), counter);
+        set_value(self.base.uoffset(TIMER_BG_LOAD_OFFSET), counter);
         let mut flags = ENABLE | PERIODIC | TIMER_SIZE_32;
         if intr {
             flags = flags | INT_EN;

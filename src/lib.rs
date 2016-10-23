@@ -64,13 +64,8 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
     // enable interrupts!
     platform::set_interrupts(true);
 
-
-    // time to enable interrupts
-    platform::set_interrupts(true);
-
-
     // sema
-    let sema = Arc::new(sched::sema::Semaphore::new(0));
+    let sema = Arc::new(sched::sema::Semaphore::new(1));
 
     // init our thread:
     {
@@ -87,6 +82,7 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
             .spawn(stack2.uoffset(platform::PAGE_SIZE), move || {
                 loop {
                     sema.acquire();
+                    platform::get_platform_services().get_scheduler().sleep(1000);
                     sema.release();
                     platform::write_to_console("t1 sem acquired");
                 }
@@ -106,9 +102,10 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
         platform::get_platform_services()
             .get_scheduler()
             .spawn(stack2.uoffset(platform::PAGE_SIZE), move || {
-                loop {
+                loop{
                     platform::write_to_console("t2 releasing semaphore");
                     sema.acquire();
+                    platform::get_platform_services().get_scheduler().sleep(1000);
                     sema.release();
                 }
             });
@@ -125,6 +122,7 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
     // .get_scheduler()
     // .spawn(stack2.uoffset(platform::PAGE_SIZE), t1);
     //
+    
     // to do:
     // create idle thread with lowest priority, that just does wait_for_interurpts
     // create isr thread with highest priority that responds to interrupts. (need semaphore for that..)
@@ -159,9 +157,9 @@ extern "C" fn eh_personality() {}
 #[lang = "panic_fmt"]
 extern "C" fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
 
-    loop {
-        platform::write_to_console("crash");
-    }
+    platform::write_to_console("crash");
+
+    loop {}
 }
 
 
