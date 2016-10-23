@@ -1,4 +1,6 @@
 TARGET ?= arm-unknown-linux-gnueabi
+LIB_COMPILER=$(shell find  ~/.multirust -name $(TARGET))/lib/libcompiler_builtins*.rlib
+CROSS_TOOL_TARGET ?= arm-none-eabi
 ARCH=arm
 BOARD=integrator
 
@@ -30,7 +32,8 @@ emulate-debug: target/kernel.img
 $(os_lib): cargo
 
 cargo:
-	cargo build --target=$(TARGET)
+	# see here: https://mail.mozilla.org/pipermail/rust-dev/2014-March/009153.html
+	cargo rustc --target=$(TARGET) -- -l compiler_builtins -Ctarget-cpu=arm1176jz-s
 
 $(stub_object): $(stub)
 	$(CPP) $(stub) |  $(AS)  -o $(stub_object)
@@ -40,7 +43,7 @@ $(glue_object): $(glue)
 
 target/kernel.img: $(os_lib) $(linker_script) $(stub_object) $(glue_object) 
 	$(LD) -n --gc-sections -T $(linker_script) -o target/kernel.img \
-		$(stub_object)  $(glue_object) target/$(TARGET)/debug/libos.a
+		$(stub_object)  $(glue_object) target/$(TARGET)/debug/libos.a $(LIB_COMPILER)
 
 build: cargo target/kernel.img
 
@@ -51,6 +54,9 @@ debugosx: build
 	@echo Followed by:
 	@echo arm-none-eabi-gdb -ex \'target remote 192.168.99.1:1234\' $(shell pwd)/target/kernel.img
 
+.PHONY: container
+container:
+	docker build -t arm-cross-tools tools/arm-cross-tools
 # cargo:
 # 	cargo build --target $(TARGET)
 #	cargo rustc --target $(TARGET) -- -Z no-landing-pads
