@@ -1,4 +1,4 @@
-mod sema;
+pub mod sema;
 
 use kernel_alloc;
 use collections::Vec;
@@ -42,6 +42,7 @@ extern "C" fn thread_start(start: *mut Box<FnBox()> ){
     unsafe{
         let f : Box< Box<FnBox()> > = Box::from_raw(start);
         f ();
+        platform::get_platform_services().get_scheduler().exit_thread();
     }
 }
 
@@ -121,10 +122,25 @@ impl Sched {
         self.idle_thread.ctx
     }
 
+    pub fn exit_thread(& self) {
+        // disable interrupts
+        let ig = platform::intr::no_interrupts();
+        // remove the current thread
+        self.threads.borrow_mut().remove(self.curr_thread_index.get());
+        let newContext = self.schedule_new();
+        // tmp ctx.. we don't really gonna use it...
+        let mut c = platform::newThread(::mem::VirtualAddress(0),::mem::VirtualAddress(0),0);
+        platform::switchContext(&mut c, &newContext);
+
+        // TODO - stack leaks here.. should we scheduler the schulder thread to clean it up.?
+
+    }
+
     pub fn yield_thread(& self) {
         // disable interrupts
         let ig = platform::intr::no_interrupts();
         self.yeild_thread_internal()
+
     }
 
     fn yeild_thread_internal(& self) {

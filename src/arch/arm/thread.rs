@@ -64,9 +64,10 @@ pub extern "C" fn switchContext(currentContext : &mut Context, newContext  : &Co
           /* place leavefunc as pc and sp and cspr in save context */
           adr r2, leavefunc
           str r2, [r1, $2]
+          /* save cpsr */
           mrs r3, cpsr
-
           str r3, [r1, $3]
+
           /* store sp */
           str sp, [r1, $5]
 

@@ -18,7 +18,6 @@ pub struct SemaphoreGuard<'a> {
 struct SemaphoreImpl {
     waiting : RefCell<VecDeque<super::ThreadId>>,
     counter : Cell<usize>,
-    sched : &'static super::Sched,
 }
 
 impl Semaphore {
@@ -29,7 +28,6 @@ impl Semaphore {
                     SemaphoreImpl {
                     waiting : RefCell::new(VecDeque::new()),
                     counter : Cell::new(0),
-                    sched : platform::get_platform_services().get_scheduler(),
                 }
             )
         }
@@ -74,8 +72,8 @@ impl SemaphoreImpl {
         if self.counter.get() > 0 {
             self.counter.set(self.counter.get() + 1);
         } else {
-            self.waiting.borrow_mut().push_back(self.sched.get_current_thread());
-            self.sched.block();
+            self.waiting.borrow_mut().push_back(platform::get_platform_services().get_scheduler().get_current_thread());
+            platform::get_platform_services().get_scheduler().block();
         }
 
     }
@@ -90,7 +88,7 @@ impl SemaphoreImpl {
             self.counter.set(self.counter.get() + 1);
         } else {
             let thread = self.waiting.borrow_mut().pop_front().unwrap();
-            self.sched.wakeup(thread); /* put thread on the ready queue */
+            platform::get_platform_services().get_scheduler().wakeup(thread); /* put thread on the ready queue */
         }
     }
 

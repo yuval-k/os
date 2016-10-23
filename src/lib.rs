@@ -31,6 +31,7 @@ pub mod platform;
 
 use collections::boxed::Box;
 use alloc::rc::Rc;
+use alloc::arc::Arc;
 use core::cell::UnsafeCell;
 
 fn init_heap(mapper : &mut ::mem::MemoryMapper, frameAllocator : &mut ::mem::FrameAllocator) {
@@ -64,12 +65,36 @@ where M : mem::MemoryMapper,
     // time to enable interrupts
     platform::set_interrupts(true);
 
+
+    // sema 
+    let sema = Arc::new(sched::sema::Semaphore::new());
+
     // init our thread:
-    const STACK2 : ::mem::VirtualAddress = ::mem::VirtualAddress(0xDD00_0000);
+    {
+        let sema = sema.clone();
+        let STACK2 : ::mem::VirtualAddress = ::mem::VirtualAddress(0xDD00_0000);
+        let pa = frame_allocator.allocate(1).unwrap();
+        mapper.map(&mut frame_allocator, pa, STACK2, mem::MemorySize::PageSizes(1));
+        platform::get_platform_services().get_scheduler().spawn(STACK2.uoffset(platform::PAGE_SIZE), move||{
+            sema.acquire();
+        }); 
+    }
+
+    // init our thread:
+    {
+        let sema = sema.clone();
+        let STACK2 : ::mem::VirtualAddress = ::mem::VirtualAddress(0xDE00_0000);
+        let pa = frame_allocator.allocate(1).unwrap();
+        mapper.map(&mut frame_allocator, pa, STACK2, mem::MemorySize::PageSizes(1));
+        platform::get_platform_services().get_scheduler().spawn(STACK2.uoffset(platform::PAGE_SIZE), move||{
+            sema.acquire();
+        }); 
+    }
+
+
+    let STACK2 : ::mem::VirtualAddress = ::mem::VirtualAddress(0xDF00_0000);
     let pa = frame_allocator.allocate(1).unwrap();
     mapper.map(&mut frame_allocator, pa, STACK2, mem::MemorySize::PageSizes(1));
-
-    // TODO wrap in safe methods.    
     platform::get_platform_services().get_scheduler().spawn(STACK2.uoffset(platform::PAGE_SIZE), t1); 
 
     // to do: 
@@ -107,7 +132,9 @@ extern fn eh_personality() {
 
 #[lang = "panic_fmt"]
 extern fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
-    loop{}
+    loop {
+
+    }
 }
 
 
