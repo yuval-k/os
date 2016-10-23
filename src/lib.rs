@@ -131,7 +131,7 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
 
 
     loop {
-        platform::get_platform_services().get_scheduler().yield_thread();
+        platform::get_platform_services().get_scheduler().block();
     }
 
 

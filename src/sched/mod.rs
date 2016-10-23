@@ -91,7 +91,7 @@ impl Sched {
     }
 
     // no interrupts here..
-    pub fn schedule(& self, old_ctx : & C) -> C {
+    pub fn schedule_no_intr(& self, old_ctx : & C) -> C {
         {
             let cur_th = self.curr_thread_index.get();
             self.threads.borrow_mut()[cur_th].ctx = *old_ctx;
@@ -143,11 +143,11 @@ impl Sched {
     pub fn yield_thread(& self) {
         // disable interrupts
         let ig = platform::intr::no_interrupts();
-        self.yeild_thread_internal()
+        self.yeild_thread_no_intr()
 
     }
 
-    fn yeild_thread_internal(& self) {
+    fn yeild_thread_no_intr(& self) {
         let new_context : platform::Context;
         let curr_thread = self.curr_thread_index.get();
 
@@ -165,16 +165,22 @@ impl Sched {
         }
     }
 
-    // assume interrupts are blocked
     pub fn block(& self) {
+        // disable interrupts
+        let ig = platform::intr::no_interrupts();
+        self.block_no_intr()
+    }
+    
+    // assume interrupts are blocked
+    pub fn block_no_intr(& self) {
         {
             self.threads.borrow_mut()[self.curr_thread_index.get()].ready = false;
         }
-        self.yeild_thread_internal();
+        self.yeild_thread_no_intr();
     }
 
     // assume interrupts are blocked
-    pub fn wakeup(& self, tid : ThreadId) {
+    pub fn wakeup_no_intr(& self, tid : ThreadId) {
         for t in self.threads.borrow_mut().iter_mut().filter(|x| x.id == tid) {
             // there can only be one..
             t.ready = true;
@@ -198,6 +204,6 @@ impl Sched {
 // for the timer interrupt..
 impl platform::InterruptSource for Sched {
     fn interrupted(& self, ctx : &mut platform::Context) {
-        *ctx = self.schedule(ctx);
+        *ctx = self.schedule_no_intr(ctx);
     }
 }

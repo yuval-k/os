@@ -69,7 +69,7 @@ impl SemaphoreImpl {
             self.counter.set(self.counter.get() - 1);
         } else {
             self.waiting.borrow_mut().push_back(platform::get_platform_services().get_scheduler().get_current_thread());
-            platform::get_platform_services().get_scheduler().block();
+            platform::get_platform_services().get_scheduler().block_no_intr();
         }
 
     }
@@ -84,7 +84,7 @@ impl SemaphoreImpl {
             self.counter.set(self.counter.get() + 1);
         } else {
             let thread = self.waiting.borrow_mut().pop_front().unwrap();
-            platform::get_platform_services().get_scheduler().wakeup(thread); /* put thread on the ready queue */
+            platform::get_platform_services().get_scheduler().wakeup_no_intr(thread); /* put thread on the ready queue */
         }
     }
 
