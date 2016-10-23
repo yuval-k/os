@@ -59,6 +59,7 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
         scheduler: sched,
         arch_services: arch_platform_services,
     });
+    // scheduler is ready ! we can use sync objects!
 
     // enable interrupts!
     platform::set_interrupts(true);
@@ -105,7 +106,7 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
         platform::get_platform_services()
             .get_scheduler()
             .spawn(stack2.uoffset(platform::PAGE_SIZE), move || {
-                loop{
+                loop {
                     platform::write_to_console("t2 releasing semaphore");
                     sema.acquire();
                     sema.release();
@@ -113,18 +114,17 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
             });
     }
 
-/*
-    let stack2: ::mem::VirtualAddress = ::mem::VirtualAddress(0xDF00_0000);
-    let pa = frame_allocator.allocate(1).unwrap();
-    mapper.map(&mut frame_allocator,
-             pa,
-             stack2,
-             mem::MemorySize::PageSizes(1))
-        .unwrap();
-    platform::get_platform_services()
-        .get_scheduler()
-        .spawn(stack2.uoffset(platform::PAGE_SIZE), t1);
-*/
+    // let stack2: ::mem::VirtualAddress = ::mem::VirtualAddress(0xDF00_0000);
+    // let pa = frame_allocator.allocate(1).unwrap();
+    // mapper.map(&mut frame_allocator,
+    // pa,
+    // stack2,
+    // mem::MemorySize::PageSizes(1))
+    // .unwrap();
+    // platform::get_platform_services()
+    // .get_scheduler()
+    // .spawn(stack2.uoffset(platform::PAGE_SIZE), t1);
+    //
     // to do:
     // create idle thread with lowest priority, that just does wait_for_interurpts
     // create isr thread with highest priority that responds to interrupts. (need semaphore for that..)

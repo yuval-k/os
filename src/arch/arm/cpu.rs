@@ -1,31 +1,31 @@
-pub const USER_MODE : u32 = 0b10000;
-pub const FIQ_MODE : u32 = 0b10001;
-pub const IRQ_MODE : u32 = 0b10010;
-pub const SUPER_MODE : u32 = 0b10011;
-pub const ABRT_MODE : u32 = 0b10111;
-pub const UNDEF_MODE : u32 = 0b11011;
-pub const SYS_MODE : u32 = 0b11111;
+pub const USER_MODE: u32 = 0b10000;
+pub const FIQ_MODE: u32 = 0b10001;
+pub const IRQ_MODE: u32 = 0b10010;
+pub const SUPER_MODE: u32 = 0b10011;
+pub const ABRT_MODE: u32 = 0b10111;
+pub const UNDEF_MODE: u32 = 0b11011;
+pub const SYS_MODE: u32 = 0b11111;
 
-pub const MODE_MASK : u32 = 0b11111;
+pub const MODE_MASK: u32 = 0b11111;
 
-pub const DISABLE_FIQ : u32 = 1 << 6;
-pub const DISABLE_IRQ : u32 = 1 << 7;
+pub const DISABLE_FIQ: u32 = 1 << 6;
+pub const DISABLE_IRQ: u32 = 1 << 7;
 
 
 // #[inline(always)] -> cause these might be used in the stub (the rest of program code will be mapped later)
 
 #[inline(always)]
 pub fn memory_write_barrier() {
-  data_memory_barrier();
+    data_memory_barrier();
 }
 
 #[inline(always)]
 pub fn invalidate_caches() {
 
-  // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0360e/I1014942.html
-  // Invalidate Both Caches. Also flushes the branch target cache
-    unsafe{
-      asm!("mcr     p15, 0, $0, c7, c7, 0"  ::"r"(0)::"volatile"
+    // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0360e/I1014942.html
+    // Invalidate Both Caches. Also flushes the branch target cache
+    unsafe {
+        asm!("mcr     p15, 0, $0, c7, c7, 0"  ::"r"(0)::"volatile"
       )
     }
 }
@@ -33,131 +33,135 @@ pub fn invalidate_caches() {
 #[inline(always)]
 pub fn invalidate_tlb() {
 
-  // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0344k/I1001599.html
-  // Invalidate Inst-TLB and Data-TLB
-    unsafe{
-      asm!("mcr     p15, 0, $0, c8, c7, 0"  ::"r"(0)::"volatile"
+    // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0344k/I1001599.html
+    // Invalidate Inst-TLB and Data-TLB
+    unsafe {
+        asm!("mcr     p15, 0, $0, c8, c7, 0"  ::"r"(0)::"volatile"
       )
     }
 }
 
 #[inline(always)]
 pub fn data_synchronization_barrier() {
-unsafe{
-  // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0344k/I1001599.html
-      asm!("MCR p15, 0, $0, c7, c10, 4"::"r"(0)::"volatile"
+    unsafe {
+        // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0344k/I1001599.html
+        asm!("MCR p15, 0, $0, c7, c10, 4"::"r"(0)::"volatile"
       )
     }
 }
 
 #[inline(always)]
 pub fn data_memory_barrier() {
-unsafe{
-  // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0344k/I1001599.html
-      asm!("MCR p15, 0, $0, c7, c10, 5"::"r"(0)::"volatile"
+    unsafe {
+        // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0344k/I1001599.html
+        asm!("MCR p15, 0, $0, c7, c10, 5"::"r"(0)::"volatile"
       )
     }
 }
 
 #[inline(always)]
-pub fn set_ttb0(page_table: *const () ) {
-  /* Set Translation Table Base 0 (TTB0) */
-  unsafe{
-    asm!("mcr p15, 0, $0, c2, c0, 0"
+pub fn set_ttb0(page_table: *const ()) {
+    // Set Translation Table Base 0 (TTB0)
+    unsafe {
+        asm!("mcr p15, 0, $0, c2, c0, 0"
           :: "r"(page_table as u32) :: "volatile"
           );
 
-  }
+    }
 }
 
 #[inline(always)]
-pub fn set_ttb1(page_table: *const () ) {
-  /* Set Translation Table Base 0 (TTB0) */
-  unsafe{
-    asm!("mcr p15, 0, $0, c2, c0, 1"
+pub fn set_ttb1(page_table: *const ()) {
+    // Set Translation Table Base 0 (TTB0)
+    unsafe {
+        asm!("mcr p15, 0, $0, c2, c0, 1"
           :: "r"(page_table as u32) :: "volatile"
           );
 
-  }
+    }
 }
 
 #[inline(always)]
-pub fn set_ttbcr(ttbcr :u32) {
-	  unsafe{asm!("mcr p15, 0, $0, c2, c0, 2" : : "r" (ttbcr):: "volatile");}
+pub fn set_ttbcr(ttbcr: u32) {
+    unsafe {
+        asm!("mcr p15, 0, $0, c2, c0, 2" : : "r" (ttbcr):: "volatile");
+    }
 }
 
 #[inline(always)]
 #[allow(unused_mut)]
 pub fn get_ttbcr() -> u32 {
-  let mut ttbcr:u32;
-	unsafe{asm!("mrc p15, 0, $0, c2, c0, 2" :  "=r" (ttbcr));}
-  return ttbcr;
+    let mut ttbcr: u32;
+    unsafe {
+        asm!("mrc p15, 0, $0, c2, c0, 2" :  "=r" (ttbcr));
+    }
+    return ttbcr;
 }
 
 
 #[inline(always)]
-pub fn write_domain_access_control_register(dcr :u32) {
-  unsafe{
-    asm!("mcr p15, 0, $0, c3, c0, 0"
+pub fn write_domain_access_control_register(dcr: u32) {
+    unsafe {
+        asm!("mcr p15, 0, $0, c3, c0, 0"
           :: "r"(dcr) :: "volatile"
           );
-  }
+    }
 }
 
 
 // c1 register controls the mmu
 #[inline(always)]
 #[allow(unused_mut)]
-fn get_p15_c1() -> u32{
-  let mut cr : u32;
-  unsafe{
-    asm!("mcr p15, 0, $0, c1, c0, 0"
-          : "=r"(cr) 
+fn get_p15_c1() -> u32 {
+    let mut cr: u32;
+    unsafe {
+        asm!("mcr p15, 0, $0, c1, c0, 0"
+          : "=r"(cr)
           );
-  }
-  return cr;
+    }
+    return cr;
 }
 
 #[inline(always)]
 
-fn set_p15_c1(cr : u32) {
-  unsafe{
-    asm!("mcr p15, 0, $0, c1, c0, 0"
+fn set_p15_c1(cr: u32) {
+    unsafe {
+        asm!("mcr p15, 0, $0, c1, c0, 0"
           :: "r"(cr) :: "volatile"
           );
-  }
+    }
 }
 
-const MMU_BIT : u32 = 1;
-const DCACHE_BIT : u32 = 1<<2;
-const ICACHE_BIT : u32 = 1<<12;
-const XP_BIT : u32 = 1<<23;
+const MMU_BIT: u32 = 1;
+const DCACHE_BIT: u32 = 1 << 2;
+const ICACHE_BIT: u32 = 1 << 12;
+const XP_BIT: u32 = 1 << 23;
 
 #[inline(always)]
 pub fn enable_mmu() {
-  let mut cr : u32;
-  cr = get_p15_c1();
+    let mut cr: u32;
+    cr = get_p15_c1();
 
-  cr |= MMU_BIT;
-  cr |= DCACHE_BIT;
-  cr |= ICACHE_BIT;
-  //extended page tables
-  // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0290g/Babhejba.html
-  // and
-  // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0360f/BGEIHGIF.html
-  cr |= XP_BIT;
+    cr |= MMU_BIT;
+    cr |= DCACHE_BIT;
+    cr |= ICACHE_BIT;
+    // extended page tables
+    // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0290g/Babhejba.html
+    // and
+    // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0360f/BGEIHGIF.html
+    cr |= XP_BIT;
 
-  set_p15_c1(cr);
+    set_p15_c1(cr);
 }
 
 
-/* not called from stub goes here: */
+// not called from stub goes here:
 
 
-pub fn set_stack_for_mode(mode : u32, stack_base : ::mem::VirtualAddress) {
+pub fn set_stack_for_mode(mode: u32, stack_base: ::mem::VirtualAddress) {
 
     unsafe {
-      asm!("
+        asm!("
             /* change cpu mode */
             mov r0, $0
             mov r2, $2
@@ -180,12 +184,12 @@ pub fn set_stack_for_mode(mode : u32, stack_base : ::mem::VirtualAddress) {
             "i"(SUPER_MODE)
             : "sp","r0","r1","cpsr" : "volatile"
             )
-            };
+    };
 }
 
 pub fn disable_interrupts() {
     unsafe {
-      asm!("mrs r0, cpsr
+        asm!("mrs r0, cpsr
             orr r0, r0, $0
             msr cpsr_c, r0            
             "
@@ -198,7 +202,7 @@ pub fn disable_interrupts() {
 
 pub fn enable_interrupts() {
     unsafe {
-      asm!("mrs r0, cpsr
+        asm!("mrs r0, cpsr
             bic r0, r0, $0
             msr cpsr_c, r0            
             "
@@ -212,18 +216,18 @@ pub fn enable_interrupts() {
 #[naked]
 pub fn wait_for_interrupts() {
     unsafe {
-      asm!("loop:
+        asm!("loop:
             mcr p15, 0, $0, c7, c0, 4
             b loop
             "::"r"(0)::"volatile")
     }
 }
 
-pub fn set_interrupts(b : bool) {
+pub fn set_interrupts(b: bool) {
     if b {
-      enable_interrupts();
+        enable_interrupts();
     } else {
-      disable_interrupts();
+        disable_interrupts();
     }
 }
 
@@ -233,67 +237,67 @@ pub fn get_interrupts() -> bool {
 
 
 #[allow(unused_mut)]
-pub fn get_cpsr() -> u32{
-  let mut cpsr : u32;
-  unsafe{
-    asm!("mrs $0, cpsr"
-          : "=r"(cpsr) 
+pub fn get_cpsr() -> u32 {
+    let mut cpsr: u32;
+    unsafe {
+        asm!("mrs $0, cpsr"
+          : "=r"(cpsr)
           );
-  }
-  return cpsr;
+    }
+    return cpsr;
 }
 
-pub fn set_cpsr(cpsr : u32) {
-  unsafe{
-    asm!("msr cpsr, $0"
+pub fn set_cpsr(cpsr: u32) {
+    unsafe {
+        asm!("msr cpsr, $0"
           :: "r"(cpsr) :: "volatile"
           );
-  }
+    }
 }
 
 #[allow(unused_mut)]
-pub fn get_spsr() -> u32{
-  let mut spsr : u32;
-  unsafe{
-    asm!("mrs $0, spsr"
-          : "=r"(spsr) 
+pub fn get_spsr() -> u32 {
+    let mut spsr: u32;
+    unsafe {
+        asm!("mrs $0, spsr"
+          : "=r"(spsr)
           );
-  }
-  return spsr;
+    }
+    return spsr;
 }
 
-pub fn set_spsr(spsr : u32) {
-  unsafe{
-    asm!("msr spsr, $0"
+pub fn set_spsr(spsr: u32) {
+    unsafe {
+        asm!("msr spsr, $0"
           :: "r"(spsr) :: "volatile"
           );
-  }
+    }
 }
 
 #[allow(unused_mut)]
-pub fn get_r13r14(spsr : u32) -> (u32, u32){
-  let cpsr = get_cpsr();
-  // get the mode
-  let frommode = cpsr & MODE_MASK;
-  let mut tomode  = MODE_MASK & spsr; // not needed..get_spsr() & MODE_MASK;
+pub fn get_r13r14(spsr: u32) -> (u32, u32) {
+    let cpsr = get_cpsr();
+    // get the mode
+    let frommode = cpsr & MODE_MASK;
+    let mut tomode = MODE_MASK & spsr; // not needed..get_spsr() & MODE_MASK;
 
-  if frommode == tomode {
-    panic!("This should only be used to get regs from different mode.")
-  }
+    if frommode == tomode {
+        panic!("This should only be used to get regs from different mode.")
+    }
 
 
-  // if to mode is user mode, change to system mode
-  if tomode == USER_MODE {
-    tomode = SYS_MODE;
-  }  
-  
-  let tocpsr = (cpsr &  !(MODE_MASK)) | tomode;
+    // if to mode is user mode, change to system mode
+    if tomode == USER_MODE {
+        tomode = SYS_MODE;
+    }
 
-  let mut r13 : u32;
-  let mut r14 : u32;
+    let tocpsr = (cpsr & !(MODE_MASK)) | tomode;
 
-  unsafe{
-    asm!("
+    let mut r13: u32;
+    let mut r14: u32;
+
+    unsafe {
+        asm!("
         mov r0, $2
         mov r1, $3
         msr cpsr, r0
@@ -305,30 +309,30 @@ pub fn get_r13r14(spsr : u32) -> (u32, u32){
         "
           : "=r"(r13), "=r"(r14): "r"(tocpsr) , "r"(cpsr) : "r0", "r1","r3", "r4": "volatile"
           );
-  }
-  
-  return (r13, r14)
+    }
+
+    return (r13, r14);
 }
 
-pub fn set_r13r14(spsr : u32, r13: u32, r14 : u32) {
-  let cpsr = get_cpsr();
-  // get the mode
-  let frommode = cpsr & MODE_MASK;
-  let mut tomode  = MODE_MASK & spsr;
+pub fn set_r13r14(spsr: u32, r13: u32, r14: u32) {
+    let cpsr = get_cpsr();
+    // get the mode
+    let frommode = cpsr & MODE_MASK;
+    let mut tomode = MODE_MASK & spsr;
 
-  if frommode == tomode {
-    panic!("This should only be used to get regs from different mode.")
-  }
+    if frommode == tomode {
+        panic!("This should only be used to get regs from different mode.")
+    }
 
-  // if to mode is user mode, change to system mode
-  if tomode == USER_MODE {
-    tomode = SYS_MODE;
-  }  
-  
-  let tocpsr = (cpsr &  !(MODE_MASK)) | tomode;
+    // if to mode is user mode, change to system mode
+    if tomode == USER_MODE {
+        tomode = SYS_MODE;
+    }
 
-  unsafe {
-    asm!("
+    let tocpsr = (cpsr & !(MODE_MASK)) | tomode;
+
+    unsafe {
+        asm!("
         mov r3, $0
         mov r4, $1
         mov r0, $2
@@ -340,5 +344,5 @@ pub fn set_r13r14(spsr : u32, r13: u32, r14 : u32) {
         "
           :: "r"(r13), "r"(r14), "r"(tocpsr) , "r"(cpsr) : "r0", "r1","r3", "r4": "volatile"
           );
-  }
+    }
 }

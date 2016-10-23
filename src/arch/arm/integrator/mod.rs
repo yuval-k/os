@@ -49,26 +49,28 @@ pub extern "C" fn integrator_main(sp_end_virt: usize,
     let kernel_size = kernel_end_virt - kernel_start_virt;
 
     let skip_ranges = [down(kernel_start_phy)..up(kernel_start_phy + kernel_size),
-                      down(ml.stack_phy.0)..up(sp_end_phy),
-                      down(l1table_id)..up(l2table_space_id + 4 * mem::L2TABLE_ENTRIES)];
+                       down(ml.stack_phy.0)..up(sp_end_phy),
+                       down(l1table_id)..up(l2table_space_id + 4 * mem::L2TABLE_ENTRIES)];
     // can't use short syntax: https://github.com/rust-lang/rust/pull/21846#issuecomment-110526401
     let mut freed_ranges: [Option<ops::Range<::mem::PhysicalAddress>>; 10] =
         [None, None, None, None, None, None, None, None, None, None];
 
-    let mut frame_allocator = mem::LameFrameAllocator::new(&skip_ranges, &mut freed_ranges, 1 << 27);
+    let mut frame_allocator =
+        mem::LameFrameAllocator::new(&skip_ranges, &mut freed_ranges, 1 << 27);
 
     let mut page_table = mem::init_page_table(::mem::VirtualAddress(l1table_id),
-                                             ::mem::VirtualAddress(l2table_space_id),
-                                             &ml,
-                                             &mut frame_allocator);
+                                              ::mem::VirtualAddress(l2table_space_id),
+                                              &ml,
+                                              &mut frame_allocator);
 
     // map all the gpio
     page_table.map_device(&mut frame_allocator,
-                         MMIO_PSTART,
-                         MMIO_VSTART,
-                         MMIO_PEND - MMIO_PSTART).unwrap();
+                    MMIO_PSTART,
+                    MMIO_VSTART,
+                    MMIO_PEND - MMIO_PSTART)
+        .unwrap();
 
-    unsafe {serial_base = page_table.p2v(serial::SERIAL_BASE_PADDR).unwrap()}
+    unsafe { serial_base = page_table.p2v(serial::SERIAL_BASE_PADDR).unwrap() }
 
     write_to_console("Welcome home!");
 
@@ -77,10 +79,10 @@ pub extern "C" fn integrator_main(sp_end_virt: usize,
     loop {}
 }
 
-static mut serial_base : ::mem::VirtualAddress = ::mem::VirtualAddress(0);
+static mut serial_base: ::mem::VirtualAddress = ::mem::VirtualAddress(0);
 
-pub fn write_to_console(s : &str) {
-    serial::Writer::new(unsafe{serial_base}).writeln(s);
+pub fn write_to_console(s: &str) {
+    serial::Writer::new(unsafe { serial_base }).writeln(s);
 }
 
 pub struct PlatformServices {

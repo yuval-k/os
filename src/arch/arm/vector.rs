@@ -7,12 +7,12 @@ use collections::boxed::Box;
 
 // processor jumps to address 0 so must be ID mapper here for now, till (if?) if will relocate the vectors.
 // pub const VECTORS_ADDR : ::mem::VirtualAddress  = ::mem::VirtualAddress(0xea00_0000);
-pub const VECTORS_ADDR : ::mem::VirtualAddress  = ::mem::VirtualAddress(0x0);
+pub const VECTORS_ADDR: ::mem::VirtualAddress = ::mem::VirtualAddress(0x0);
 
 // NOTE: DO NOT change struct without changing the inline assembly in vector_entry
 #[repr(C, packed)]
 #[derive(Copy, Clone)]
-struct InterruptContext{
+struct InterruptContext {
     cpsr: u32,
     r0: u32,
     r1: u32,
@@ -119,9 +119,9 @@ vector_entry
     }}
 }
 
- 
+
 #[naked]
- fn vector_table_asm() {
+fn vector_table_asm() {
     unsafe {
         asm!("ldr pc, [pc, #24]" : : : : "volatile");
     };
@@ -130,9 +130,10 @@ vector_entry
 // TODO change vec_table to point to the right place in memory
 pub fn init_interrupts() {
     unsafe {
-        let mut vec_table : &'static mut [u32] = slice::from_raw_parts_mut(VECTORS_ADDR.0 as *mut u32, 4*8*2);
+        let mut vec_table: &'static mut [u32] =
+            slice::from_raw_parts_mut(VECTORS_ADDR.0 as *mut u32, 4 * 8 * 2);
 
-        let asmjump : *const u32 = vector_table_asm as *const u32;
+        let asmjump: *const u32 = vector_table_asm as *const u32;
         vec_table[0] = *asmjump;
         vec_table[1] = *asmjump;
         vec_table[2] = *asmjump;
@@ -143,60 +144,60 @@ pub fn init_interrupts() {
         vec_table[7] = *asmjump;
 
         // default implementations
-        vec_table[8+0] = inthandler!(vector_reset_handler) as u32;
-        vec_table[8+1] = inthandler!(vector_undefined_handler) as u32;
-        vec_table[8+2] = inthandler!(vector_softint_handler) as u32;
-        vec_table[8+3] = inthandler!(vector_prefetch_abort_handler) as u32;
-        vec_table[8+4] = inthandler!(vector_data_abort_handler) as u32;
-        vec_table[8+5] = 0;
-        vec_table[8+6] = inthandler!(vector_irq_handler) as u32;
-        vec_table[8+7] = inthandler!(vector_fiq_handler) as u32;
+        vec_table[8 + 0] = inthandler!(vector_reset_handler) as u32;
+        vec_table[8 + 1] = inthandler!(vector_undefined_handler) as u32;
+        vec_table[8 + 2] = inthandler!(vector_softint_handler) as u32;
+        vec_table[8 + 3] = inthandler!(vector_prefetch_abort_handler) as u32;
+        vec_table[8 + 4] = inthandler!(vector_data_abort_handler) as u32;
+        vec_table[8 + 5] = 0;
+        vec_table[8 + 6] = inthandler!(vector_irq_handler) as u32;
+        vec_table[8 + 7] = inthandler!(vector_fiq_handler) as u32;
     }
 }
 
 pub struct VectorTable {
     // TODO re-write when we have a heap
-    irq_callback : Option<Box<platform::InterruptSource>>,
+    irq_callback: Option<Box<platform::InterruptSource>>,
 }
 
 // TODO: sync access to this or even better, to it lock free :)
-static mut vecTable : VectorTable = VectorTable{
-    irq_callback : None
-};
+static mut vecTable: VectorTable = VectorTable { irq_callback: None };
 
 // TODO: make thread safe if multi processing !!
-pub fn get_vec_table() -> &'static mut VectorTable{ unsafe{ &mut vecTable } }
+pub fn get_vec_table() -> &'static mut VectorTable {
+    unsafe { &mut vecTable }
+}
 
 impl VectorTable {
-    pub fn set_irq_callback(&mut self, callback : Box<platform::InterruptSource>) {
+    pub fn set_irq_callback(&mut self, callback: Box<platform::InterruptSource>) {
         self.irq_callback = Some(callback);
     }
 }
 
-fn vector_reset_handler(_ : &mut Context){
+fn vector_reset_handler(_: &mut Context) {
 
     // TODO : call scheduler
-    loop{};
+    loop {}
 
 }
 
-fn vector_undefined_handler(_ : &mut Context){
-    loop{};
+fn vector_undefined_handler(_: &mut Context) {
+    loop {}
 }
 
-fn vector_softint_handler(_ : &mut Context){
-    loop{};
+fn vector_softint_handler(_: &mut Context) {
+    loop {}
 }
 
-fn vector_prefetch_abort_handler(_ : &mut Context) {
-    loop{};
+fn vector_prefetch_abort_handler(_: &mut Context) {
+    loop {}
 }
 
-fn vector_data_abort_handler(_ : &mut Context){
-    loop{};
+fn vector_data_abort_handler(_: &mut Context) {
+    loop {}
 }
 
-fn vector_irq_handler(ctx : &mut Context){
+fn vector_irq_handler(ctx: &mut Context) {
     unsafe {
         if let Some(ref mut func) = vecTable.irq_callback {
             func.interrupted(ctx);
@@ -204,6 +205,6 @@ fn vector_irq_handler(ctx : &mut Context){
     }
 }
 
-fn vector_fiq_handler(_ : & Context) -> Option<Context> {
-    loop{}
+fn vector_fiq_handler(_: &Context) -> Option<Context> {
+    loop {}
 }
