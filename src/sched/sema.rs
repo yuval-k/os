@@ -1,11 +1,7 @@
 use collections::VecDeque;
-use alloc::rc::Rc;
 use core::cell::Cell;
 use core::cell::RefCell;
-use super::Sched;
 use platform;
-
-use spin;
 
 pub struct Semaphore {
     sema : platform::intr::InterruptGuard<SemaphoreImpl>,

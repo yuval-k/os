@@ -5,7 +5,7 @@ pub use ::arch::arm::cpu::get_interrupts;
 pub use ::arch::arm::cpu::wait_for_interrupts;
 
 pub type Context = ::arch::arm::thread::Context;
-pub use ::arch::arm::thread::newThread;
-pub use ::arch::arm::thread::switchContext;
+pub use ::arch::arm::thread::new_thread;
+pub use ::arch::arm::thread::switch_context;
 
 pub type ArchPlatformServices = ::arch::arm::PlatformServices;

@@ -1,4 +1,4 @@
-use core::intrinsics::{volatile_load, volatile_store};
+use core::intrinsics::volatile_store;
 use platform;
 use alloc::rc::Rc;
 
@@ -29,7 +29,6 @@ bitflags! {
 }
 
 pub struct Timer {
-    index : usize,
     base : ::mem::VirtualAddress, // this should be mapped to TIMERS_BASE
     callback : Rc<platform::InterruptSource>
 }
@@ -38,7 +37,6 @@ pub struct Timer {
 impl Timer {
     pub fn new(index : usize, timerbase : ::mem::VirtualAddress, callback : Rc<platform::InterruptSource>) -> Timer {
         Timer {
-            index : index,
             base : timerbase.uoffset(index * TIMER_BASE_OFFSET),
             callback : callback
         }

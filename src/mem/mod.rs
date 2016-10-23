@@ -9,7 +9,7 @@ pub enum MemorySize {
     PageSizes(usize),
 }
 
-pub fn toBytes(x : MemorySize) -> usize {
+pub fn to_bytes(x : MemorySize) -> usize {
     match x {
         MemorySize::Bytes(b) => b,
         MemorySize::KiloBytes(k) => k << 10,
@@ -19,8 +19,8 @@ pub fn toBytes(x : MemorySize) -> usize {
     }
 }
 
-pub fn toPages(x : MemorySize) -> Result<usize, ()> {
-    let b = toBytes(x);
+pub fn to_pages(x : MemorySize) -> Result<usize, ()> {
+    let b = to_bytes(x);
     if (b & super::platform::PAGE_MASK) != 0 {
         Err(())
     } else {
@@ -87,9 +87,4 @@ pub trait MemoryMapper {
 pub trait MemoryManagaer {
     fn allocate(&mut self,   v : VirtualAddress, size : MemorySize) -> Result<(), ()>;
     fn deallocate(&mut self, v : VirtualAddress, size : MemorySize) -> Result<(), ()>;
-}
-
-struct DefaultMemoryManager<F : FrameAllocator, M : MemoryMapper> {
-    memMapper : M,
-    frameAlloc : F
 }

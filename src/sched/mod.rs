@@ -1,6 +1,5 @@
 pub mod sema;
 
-use kernel_alloc;
 use collections::Vec;
 use collections::boxed::Box;
 use core::cell::RefCell;
@@ -53,13 +52,13 @@ impl Sched {
             // fake thread as this main thread..
             threads : RefCell::new(vec![Box::new(
                 Thread{
-                    ctx : platform::newThread(::mem::VirtualAddress(0),::mem::VirtualAddress(0),0),
+                    ctx : platform::new_thread(::mem::VirtualAddress(0),::mem::VirtualAddress(0),0),
                     ready: true,
                     id : MAIN_THREAD_ID,
                 })
                 ]),
             idle_thread: Thread{
-                ctx : platform::newThread(::mem::VirtualAddress(0), ::mem::VirtualAddress(platform::wait_for_interrupts as usize), 0),
+                ctx : platform::new_thread(::mem::VirtualAddress(0), ::mem::VirtualAddress(platform::wait_for_interrupts as usize), 0),
                 ready: true,
                 id : IDLE_THREAD_ID,
             },
@@ -80,7 +79,7 @@ impl Sched {
         self.thread_id_counter.set(self.thread_id_counter.get() + 1);
 
         let t = Box::new(Thread{
-                ctx : platform::newThread(stack, start, arg),
+                ctx : platform::new_thread(stack, start, arg),
                 ready : true,
                 id : ThreadId(self.thread_id_counter.get()),
         });
@@ -105,7 +104,7 @@ impl Sched {
         // find an eligble thread
         // threads.map()
         let num_threads = self.threads.borrow().len();
-        for i in 0 .. num_threads {
+        for _ in 0 .. num_threads {
             self.curr_thread_index.set(self.curr_thread_index.get() + 1);
             // TODO linker with libgcc/compiler_rt so we can have division and mod
             if self.curr_thread_index.get() == num_threads {
@@ -127,10 +126,10 @@ impl Sched {
         let ig = platform::intr::no_interrupts();
         // remove the current thread
         self.threads.borrow_mut().remove(self.curr_thread_index.get());
-        let newContext = self.schedule_new();
+        let new_context = self.schedule_new();
         // tmp ctx.. we don't really gonna use it...
-        let mut c = platform::newThread(::mem::VirtualAddress(0),::mem::VirtualAddress(0),0);
-        platform::switchContext(&mut c, &newContext);
+        let mut c = platform::new_thread(::mem::VirtualAddress(0),::mem::VirtualAddress(0),0);
+        platform::switch_context(&mut c, &new_context);
 
         // TODO - stack leaks here.. should we scheduler the schulder thread to clean it up.?
 
@@ -144,11 +143,11 @@ impl Sched {
     }
 
     fn yeild_thread_internal(& self) {
-        let newContext : platform::Context;
+        let new_context : platform::Context;
         let curr_thread = self.curr_thread_index.get();
 
         // TODO: should we add a mutex for smp?
-        newContext = self.schedule_new();
+        new_context = self.schedule_new();
         
         if curr_thread != self.curr_thread_index.get() {
             // save the context, and go go go
@@ -156,7 +155,7 @@ impl Sched {
             // use unsafe cell as the we have a context switch.
             let threads = unsafe{ &mut *self.threads.as_ptr() };
             let ctx =&mut (threads[curr_thread].ctx);
-            platform::switchContext(ctx, &newContext);
+            platform::switch_context(ctx, &new_context);
             // we don't get here :)
         }
     }
@@ -171,7 +170,11 @@ impl Sched {
 
     // assume interrupts are blocked
     pub fn wakeup(& self, tid : ThreadId) {
-        self.threads.borrow_mut().iter_mut().filter(|x| x.id == tid).map(|x| x.ready = true);
+        for t in self.threads.borrow_mut().iter_mut().filter(|x| x.id == tid) {
+            // there can only be one..
+            t.ready = true;
+            break;
+        }
     }
 
     pub fn get_current_thread(&self) -> ThreadId {
@@ -190,9 +193,6 @@ impl Sched {
 // for the timer interrupt..
 impl platform::InterruptSource for Sched {
     fn interrupted(& self, ctx : &mut platform::Context) {
-        unsafe {
-            // TODO make this thread safe; or later in the init and remove altogether...
-            *ctx = self.schedule(ctx);
-        }
+        *ctx = self.schedule(ctx);
     }
 }

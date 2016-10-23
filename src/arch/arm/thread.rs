@@ -1,7 +1,5 @@
 
-use super::vector;
-
-// NOTE: DO NOT change struct without changing the inline assembly in switchContext
+// NOTE: DO NOT change struct without changing the inline assembly in switch_context
 #[repr(C, packed)]
 #[derive(Copy, Clone)]
 pub struct Context {
@@ -52,7 +50,7 @@ const SP_OFFSET : u32 = 52;
 
 // switch context without an interrupt.
 // called from kernel yeilding functions in system mode.
-pub extern "C" fn switchContext(currentContext : &mut Context, newContext  : &Context) {
+pub extern "C" fn switch_context(current_context : &mut Context, new_context  : &Context) {
     // save the non-scratch registers, as caller shouldn't care about the
     // scratch registers or cpsr
     unsafe{
@@ -86,7 +84,7 @@ pub extern "C" fn switchContext(currentContext : &mut Context, newContext  : &Co
 
           ldmfd sp!, {r4-r12,r14}
 
-    ":: "r"(newContext), "r"(currentContext) , 
+    ":: "r"(new_context), "r"(current_context) , 
         "i"( PC_OFFSET ) , 
         "i"( CPSR_OFFSET ), 
         "i"( LR_OFFSET ),
@@ -98,7 +96,7 @@ pub extern "C" fn switchContext(currentContext : &mut Context, newContext  : &Co
 
 // cspr in system mode with interrupts enabled and no flags.
 const NEW_CSPR : u32 = super::cpu::SUPER_MODE;
-pub fn newThread(stack : ::mem::VirtualAddress, start : ::mem::VirtualAddress, arg : usize) -> Context {
+pub fn new_thread(stack : ::mem::VirtualAddress, start : ::mem::VirtualAddress, arg : usize) -> Context {
 Context {
             // TODO make this cross platform
             r0:arg as u32,r1:0,r2:0,r3:0,r4:0,r5:0,r6:0,r7:0,r8:0,r9:0,r10:0,r11:0,r12:0,sp:stack.0 as u32,lr:0,pc:start.0 as u32,cpsr: NEW_CSPR

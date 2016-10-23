@@ -6,12 +6,9 @@ pub mod stub;
 use core::ops;
 use super::mem;
 use super::vector;
-use super::cpu;
-use super::thread;
 
 use collections::boxed::Box;
 use alloc::rc::Rc;
-use core::cell::UnsafeCell;
 
 use mem::MemoryMapper;
 use platform;
@@ -51,38 +48,30 @@ pub extern "C" fn integrator_main(sp_end_virt: usize,
 
     let kernel_size = kernel_end_virt - kernel_start_virt;
 
-    let skipRanges = [down(kernel_start_phy)..up(kernel_start_phy + kernel_size),
+    let skip_ranges = [down(kernel_start_phy)..up(kernel_start_phy + kernel_size),
                       down(ml.stack_phy.0)..up(sp_end_phy),
                       down(l1table_id)..up(l2table_space_id + 4 * mem::L2TABLE_ENTRIES)];
     // can't use short syntax: https://github.com/rust-lang/rust/pull/21846#issuecomment-110526401
-    let mut freedRanges: [Option<ops::Range<::mem::PhysicalAddress>>; 10] =
+    let mut freed_ranges: [Option<ops::Range<::mem::PhysicalAddress>>; 10] =
         [None, None, None, None, None, None, None, None, None, None];
 
-    let mut frameAllocator = mem::LameFrameAllocator::new(&skipRanges, &mut freedRanges, 1 << 27);
+    let mut frame_allocator = mem::LameFrameAllocator::new(&skip_ranges, &mut freed_ranges, 1 << 27);
 
-    let mut pageTable = mem::init_page_table(::mem::VirtualAddress(l1table_id),
+    let mut page_table = mem::init_page_table(::mem::VirtualAddress(l1table_id),
                                              ::mem::VirtualAddress(l2table_space_id),
                                              &ml,
-                                             &mut frameAllocator);
-
-    // init and map vector tables - we don't supposed to have to do this now, but it makes debugging easier..
-    pageTable.map(&mut frameAllocator,
-                  ::mem::PhysicalAddress(0),
-                  vector::VECTORS_ADDR,
-                  ::mem::MemorySize::PageSizes(1));
-    vector::init_interrupts();
-    super::build_mode_stacks(&mut pageTable, &mut frameAllocator);
+                                             &mut frame_allocator);
 
     // map all the gpio
-    pageTable.map_device(&mut frameAllocator,
+    page_table.map_device(&mut frame_allocator,
                          MMIO_PSTART,
                          MMIO_VSTART,
-                         MMIO_PEND - MMIO_PSTART);
+                         MMIO_PEND - MMIO_PSTART).unwrap();
 
-    let mut w = &mut serial::Writer::new(pageTable.p2v(serial::SERIAL_BASE_PADDR).unwrap());
+    let mut w = &mut serial::Writer::new(page_table.p2v(serial::SERIAL_BASE_PADDR).unwrap());
     w.writeln("Welcome home!");
 
-    ::arch::arm::arm_main(pageTable, frameAllocator);
+    ::arch::arm::arm_main(page_table, frame_allocator);
 
     loop {}
 }

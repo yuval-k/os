@@ -1,7 +1,3 @@
-use core::cell::UnsafeCell;
-use core::ops::{Drop, Deref, DerefMut};
-
-
 pub const USER_MODE : u32 = 0b10000;
 pub const FIQ_MODE : u32 = 0b10001;
 pub const IRQ_MODE : u32 = 0b10010;
@@ -91,6 +87,7 @@ pub fn set_ttbcr(ttbcr :u32) {
 }
 
 #[inline(always)]
+#[allow(unused_mut)]
 pub fn get_ttbcr() -> u32 {
   let mut ttbcr:u32;
 	unsafe{asm!("mrc p15, 0, $0, c2, c0, 2" :  "=r" (ttbcr));}
@@ -110,6 +107,7 @@ pub fn write_domain_access_control_register(dcr :u32) {
 
 // c1 register controls the mmu
 #[inline(always)]
+#[allow(unused_mut)]
 fn get_p15_c1() -> u32{
   let mut cr : u32;
   unsafe{
@@ -234,6 +232,7 @@ pub fn get_interrupts() -> bool {
 }
 
 
+#[allow(unused_mut)]
 pub fn get_cpsr() -> u32{
   let mut cpsr : u32;
   unsafe{
@@ -252,6 +251,7 @@ pub fn set_cpsr(cpsr : u32) {
   }
 }
 
+#[allow(unused_mut)]
 pub fn get_spsr() -> u32{
   let mut spsr : u32;
   unsafe{
@@ -270,6 +270,7 @@ pub fn set_spsr(spsr : u32) {
   }
 }
 
+#[allow(unused_mut)]
 pub fn get_r13r14(spsr : u32) -> (u32, u32){
   let cpsr = get_cpsr();
   // get the mode

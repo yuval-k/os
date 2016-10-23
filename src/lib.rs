@@ -29,17 +29,15 @@ pub mod sched;
 pub mod platform;
 
 
-use collections::boxed::Box;
 use alloc::rc::Rc;
 use alloc::arc::Arc;
-use core::cell::UnsafeCell;
 
-fn init_heap(mapper : &mut ::mem::MemoryMapper, frameAllocator : &mut ::mem::FrameAllocator) {
-    const heap_base : ::mem::VirtualAddress = mem::VirtualAddress(0xf000_0000);
-    const heap_size : mem::MemorySize = mem::MemorySize::MegaBytes(4); // 4mb heap
-    let pa = frameAllocator.allocate(mem::toPages(heap_size).ok().unwrap()).unwrap();
-    mapper.map(frameAllocator, pa, heap_base, heap_size);
-    kernel_alloc::init_heap(heap_base.0, mem::toBytes(heap_size), platform::get_interrupts, platform::set_interrupts);
+fn init_heap(mapper : &mut ::mem::MemoryMapper, frame_allocator : &mut ::mem::FrameAllocator) {
+    const HEAP_BASE : ::mem::VirtualAddress = mem::VirtualAddress(0xf000_0000);
+    const HEAP_SIZE : mem::MemorySize = mem::MemorySize::MegaBytes(4); // 4mb heap
+    let pa = frame_allocator.allocate(mem::to_pages(HEAP_SIZE).ok().unwrap()).unwrap();
+    mapper.map(frame_allocator, pa, HEAP_BASE, HEAP_SIZE).unwrap();
+    kernel_alloc::init_heap(HEAP_BASE.0, mem::to_bytes(HEAP_SIZE), platform::get_interrupts, platform::set_interrupts);
 
 }
 
@@ -72,10 +70,10 @@ where M : mem::MemoryMapper,
     // init our thread:
     {
         let sema = sema.clone();
-        let STACK2 : ::mem::VirtualAddress = ::mem::VirtualAddress(0xDD00_0000);
+        let stack2 : ::mem::VirtualAddress = ::mem::VirtualAddress(0xDD00_0000);
         let pa = frame_allocator.allocate(1).unwrap();
-        mapper.map(&mut frame_allocator, pa, STACK2, mem::MemorySize::PageSizes(1));
-        platform::get_platform_services().get_scheduler().spawn(STACK2.uoffset(platform::PAGE_SIZE), move||{
+        mapper.map(&mut frame_allocator, pa, stack2, mem::MemorySize::PageSizes(1)).unwrap();
+        platform::get_platform_services().get_scheduler().spawn(stack2.uoffset(platform::PAGE_SIZE), move||{
             sema.acquire();
         }); 
     }
@@ -83,19 +81,19 @@ where M : mem::MemoryMapper,
     // init our thread:
     {
         let sema = sema.clone();
-        let STACK2 : ::mem::VirtualAddress = ::mem::VirtualAddress(0xDE00_0000);
+        let stack2 : ::mem::VirtualAddress = ::mem::VirtualAddress(0xDE00_0000);
         let pa = frame_allocator.allocate(1).unwrap();
-        mapper.map(&mut frame_allocator, pa, STACK2, mem::MemorySize::PageSizes(1));
-        platform::get_platform_services().get_scheduler().spawn(STACK2.uoffset(platform::PAGE_SIZE), move||{
+        mapper.map(&mut frame_allocator, pa, stack2, mem::MemorySize::PageSizes(1)).unwrap();
+        platform::get_platform_services().get_scheduler().spawn(stack2.uoffset(platform::PAGE_SIZE), move||{
             sema.acquire();
         }); 
     }
 
 
-    let STACK2 : ::mem::VirtualAddress = ::mem::VirtualAddress(0xDF00_0000);
+    let stack2 : ::mem::VirtualAddress = ::mem::VirtualAddress(0xDF00_0000);
     let pa = frame_allocator.allocate(1).unwrap();
-    mapper.map(&mut frame_allocator, pa, STACK2, mem::MemorySize::PageSizes(1));
-    platform::get_platform_services().get_scheduler().spawn(STACK2.uoffset(platform::PAGE_SIZE), t1); 
+    mapper.map(&mut frame_allocator, pa, stack2, mem::MemorySize::PageSizes(1)).unwrap();
+    platform::get_platform_services().get_scheduler().spawn(stack2.uoffset(platform::PAGE_SIZE), t1); 
 
     // to do: 
     // create idle thread with lowest priority, that just does wait_for_interurpts

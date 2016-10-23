@@ -54,17 +54,17 @@ impl<'a> ::mem::FrameAllocator for LameFrameAllocator<'a> {
         }
 */
         let mut cur_free;
-        let mut potentialNext;
+        let mut potential_next;
 
         'outer: loop {
           cur_free = self.nextfree;
 
-          potentialNext = cur_free.offset((number << PAGE_SHIFT) as isize);
+          potential_next = cur_free.offset((number << PAGE_SHIFT) as isize);
 
-          let curRange = cur_free .. potentialNext;
+          let cur_range = cur_free .. potential_next;
 
           for r in self.ranges {
-            if (curRange.start < r.end) && (r.start < curRange.end) {
+            if (cur_range.start < r.end) && (r.start < cur_range.end) {
               self.nextfree = cmp::max(self.nextfree, r.end);
               continue 'outer;
             }
@@ -73,7 +73,7 @@ impl<'a> ::mem::FrameAllocator for LameFrameAllocator<'a> {
             break;
         }
 
-        self.nextfree = potentialNext;
+        self.nextfree = potential_next;
         
         if self.nextfree > self.max {
             return None;
@@ -115,9 +115,9 @@ pub struct FirstLevelTableDescriptor(u32);
 // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0333h/Babifihd.html
 const CACHEABLE : u32 = 1 << 3;
 const BUFFERABLE : u32 = 1 << 2;
-const L2_SHAREABLE  : u32 = 1 << 10;
+// const L2_SHAREABLE  : u32 = 1 << 10;
 
-const L2_NX  : u32 = 1;
+// const L2_NX  : u32 = 1;
 const L2_XPAGE_TYPE  : u32 = 1 << 1;
 
 // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0211k/Caceaije.html
@@ -291,24 +291,24 @@ pub struct MemLayout {
 }
 
 
-fn getInitFrames(fa : & mut ::mem::FrameAllocator) -> [::mem::PhysicalAddress;5]{
+fn get_init_frames(fa : & mut ::mem::FrameAllocator) -> [::mem::PhysicalAddress;5]{
   const NUM_FRAMES : usize = 7; // guaranteed to have somthing aligned here..
-  let mut freeFrames : [::mem::PhysicalAddress;7] = [::mem::PhysicalAddress(0);NUM_FRAMES];
-  let pa = fa.allocate(freeFrames.len()).unwrap();
+  let mut free_frames : [::mem::PhysicalAddress;7] = [::mem::PhysicalAddress(0);NUM_FRAMES];
+  let pa = fa.allocate(free_frames.len()).unwrap();
 
   // find out which one devides with 16k
-  let l1StartFrame =(4 - ((pa.0 >> PAGE_SHIFT) & 0b11))& 0b11;
+  let l1_start_frame =(4 - ((pa.0 >> PAGE_SHIFT) & 0b11))& 0b11;
 
   for i in 0 .. NUM_FRAMES {
-    let shiftedIndex = (i + l1StartFrame) % NUM_FRAMES;
-    freeFrames[i] = pa.offset((shiftedIndex << PAGE_SHIFT) as isize);
+    let shifted_index = (i + l1_start_frame) % NUM_FRAMES;
+    free_frames[i] = pa.offset((shifted_index << PAGE_SHIFT) as isize);
   }
 
   // don't need the last two..
-  fa.deallocate(freeFrames[5], 1);
-  fa.deallocate(freeFrames[6], 1);
+  fa.deallocate(free_frames[5], 1);
+  fa.deallocate(free_frames[6], 1);
 
-  return [freeFrames[0],freeFrames[1],freeFrames[2],freeFrames[3],freeFrames[4]]
+  return [free_frames[0],free_frames[1],free_frames[2],free_frames[3],free_frames[4]]
 }
 
 fn up(a : usize) -> usize {(a + PAGE_MASK) & (!PAGE_MASK)}
@@ -324,7 +324,7 @@ pub fn init_page_table(l1table_identity : ::mem::VirtualAddress, l2table_identit
         let mut l2 = unsafe{ L2Table::from_virt_address(l2table_identity)};
 
         // get seven frames, where the first four are contingous and aligned to 16kb:
-        let freeFrames : [::mem::PhysicalAddress;5] = getInitFrames(fa);
+        let free_frames : [::mem::PhysicalAddress;5] = get_init_frames(fa);
 
         // first 4 frames are for l1 table (as they are on 16k boundery).
         // get the 5th frame to use as temporary coarse table
@@ -333,14 +333,14 @@ pub fn init_page_table(l1table_identity : ::mem::VirtualAddress, l2table_identit
         active_table[L1_VIRT_ADDRESS.0 >> MB_SHIFT] =  L1TableDescriptor::new(::mem::PhysicalAddress(l2table_identity.0));
 
         // map the l1 page table
-        l2[0] = L2TableDescriptor::new(freeFrames[0]);
-        l2[1] = L2TableDescriptor::new(freeFrames[1]);
-        l2[2] = L2TableDescriptor::new(freeFrames[2]);
-        l2[3] = L2TableDescriptor::new(freeFrames[3]);
+        l2[0] = L2TableDescriptor::new(free_frames[0]);
+        l2[1] = L2TableDescriptor::new(free_frames[1]);
+        l2[2] = L2TableDescriptor::new(free_frames[2]);
+        l2[3] = L2TableDescriptor::new(free_frames[3]);
         // map one more frame so we can use map the table itself
-        l2[4] = L2TableDescriptor::new(freeFrames[4]);
+        l2[4] = L2TableDescriptor::new(free_frames[4]);
 
-        let nextFreeL2Index = 5;
+        let next_free_l2_index = 5;
 
         // flush changes
         cpu::memory_write_barrier();
@@ -352,20 +352,20 @@ pub fn init_page_table(l1table_identity : ::mem::VirtualAddress, l2table_identit
         let mut newl2 = unsafe{ L2Table::from_virt_address(L1_VIRT_ADDRESS.offset((4 << PAGE_SHIFT) as isize))};
 
         // map the new map in itself in the same address.
-        newl1[L1_VIRT_ADDRESS.0 >> MB_SHIFT] =  L1TableDescriptor::new(freeFrames[4]);
-        newl2[0] = L2TableDescriptor::new(freeFrames[0]);
-        newl2[1] = L2TableDescriptor::new(freeFrames[1]);
-        newl2[2] = L2TableDescriptor::new(freeFrames[2]);
-        newl2[3] = L2TableDescriptor::new(freeFrames[3]);
-        newl2[4] = L2TableDescriptor::new(freeFrames[4]);
+        newl1[L1_VIRT_ADDRESS.0 >> MB_SHIFT] =  L1TableDescriptor::new(free_frames[4]);
+        newl2[0] = L2TableDescriptor::new(free_frames[0]);
+        newl2[1] = L2TableDescriptor::new(free_frames[1]);
+        newl2[2] = L2TableDescriptor::new(free_frames[2]);
+        newl2[3] = L2TableDescriptor::new(free_frames[3]);
+        newl2[4] = L2TableDescriptor::new(free_frames[4]);
 
         // now when we will switch the page table, the page table itself will be available in the same place.
         
 
         // map the kernel in the new page table:
-        let kernelSize = up(::mem::toBytes(ml.kernel_end_virt - ml.kernel_start_virt));
+        let kernel_size = up(::mem::to_bytes(ml.kernel_end_virt - ml.kernel_start_virt));
         // mega bytes rounded up
-        let nummb = ((kernelSize + MB_MASK) & (!MB_MASK)) >> MB_SHIFT;
+        let nummb = ((kernel_size + MB_MASK) & (!MB_MASK)) >> MB_SHIFT;
 
         // for each meg:
         for i in 0..nummb {
@@ -380,7 +380,7 @@ pub fn init_page_table(l1table_identity : ::mem::VirtualAddress, l2table_identit
           cpu::invalidate_tlb();
 
           // map the frame 
-          l2[nextFreeL2Index] = L2TableDescriptor::new(frame);
+          l2[next_free_l2_index] = L2TableDescriptor::new(frame);
         
           // flush changes
           cpu::memory_write_barrier();
@@ -388,21 +388,21 @@ pub fn init_page_table(l1table_identity : ::mem::VirtualAddress, l2table_identit
           cpu::invalidate_tlb();
           
           // frame now available here:
-          let frameAddress = L1_VIRT_ADDRESS.uoffset(nextFreeL2Index << PAGE_SHIFT);
-          let mut currKernelL2 = unsafe{L2Table::from_virt_address(frameAddress)};
-          // for each 4k block in the mb, map it in newframel2
+          let frame_address = L1_VIRT_ADDRESS.uoffset(next_free_l2_index << PAGE_SHIFT);
+          let mut curr_kernel_l2 = unsafe{L2Table::from_virt_address(frame_address)};
+          // for each 4k block in the mb, map it in new_framel2
           let curphy_start = ml.kernel_start_phy.uoffset(i << MB_SHIFT);
           // check that in the end we don't map a full MB
           let nextmb =  ml.kernel_start_phy.uoffset((i+1) << MB_SHIFT);
-          let curphy_end = if (i+1) == nummb {ml.kernel_start_phy.uoffset(kernelSize)} else{nextmb};
+          let curphy_end = if (i+1) == nummb {ml.kernel_start_phy.uoffset(kernel_size)} else{nextmb};
 
           let mut l2loopindex = 0;
-          for curFrame in  (curphy_start.0 .. curphy_end.0).step_by(PAGE_SIZE) {
-            currKernelL2[l2loopindex] =  L2TableDescriptor::new(::mem::PhysicalAddress(curFrame));
+          for cur_frame in  (curphy_start.0 .. curphy_end.0).step_by(PAGE_SIZE) {
+            curr_kernel_l2[l2loopindex] =  L2TableDescriptor::new(::mem::PhysicalAddress(cur_frame));
             l2loopindex += 1;
           }
-          for curFrame in  (curphy_end.0 .. nextmb.0).step_by(PAGE_SIZE) {
-            currKernelL2[l2loopindex] =  L2TableDescriptor::new(::mem::PhysicalAddress(curFrame));
+          for cur_frame in  (curphy_end.0 .. nextmb.0).step_by(PAGE_SIZE) {
+            curr_kernel_l2[l2loopindex] =  L2TableDescriptor::new(::mem::PhysicalAddress(cur_frame));
             l2loopindex += 1;
           }
 
@@ -428,17 +428,17 @@ pub fn init_page_table(l1table_identity : ::mem::VirtualAddress, l2table_identit
         cpu::invalidate_tlb();
 
         // temporary the l2 entry to memory
-        l2[nextFreeL2Index] = L2TableDescriptor::new(stackframe);
+        l2[next_free_l2_index] = L2TableDescriptor::new(stackframe);
 
         // flush changes
         cpu::memory_write_barrier();
         cpu::invalidate_caches();
         cpu::invalidate_tlb();
 
-        let frameAddress = L1_VIRT_ADDRESS.uoffset(nextFreeL2Index << PAGE_SHIFT);
-        let mut stackL2 = unsafe{L2Table::from_virt_address(frameAddress)};
+        let frame_address = L1_VIRT_ADDRESS.uoffset(next_free_l2_index << PAGE_SHIFT);
+        let mut stack_l2 = unsafe{L2Table::from_virt_address(frame_address)};
         // TODO: set nx bit
-        stackL2[(sp >>PAGE_SHIFT) & 0xFF] = L2TableDescriptor::new(::mem::PhysicalAddress(spframe));
+        stack_l2[(sp >>PAGE_SHIFT) & 0xFF] = L2TableDescriptor::new(::mem::PhysicalAddress(spframe));
 
 
         // turn on new mmu and free the stub memory
@@ -455,20 +455,20 @@ pub fn init_page_table(l1table_identity : ::mem::VirtualAddress, l2table_identit
         // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0344k/I1001599.html
         //set domain 0 to what ever is in the table.
         cpu::write_domain_access_control_register(1);
-        cpu::set_ttb0(freeFrames[0].0 as *const());
+        cpu::set_ttb0(free_frames[0].0 as *const());
         cpu::invalidate_caches();
         cpu::invalidate_tlb();
 
         PageTable {
           descriptors : newl1,
-          tmpMap : newl2,
+          tmp_map : newl2,
         }
 
 }
 
 pub struct PageTable {
    pub descriptors : L1Table,
-   tmpMap : L2Table,
+   tmp_map : L2Table,
 }
 
 
@@ -480,17 +480,17 @@ impl PageTable {
 
   fn map_single_descriptor(&mut self, frameallocator : & mut ::mem::FrameAllocator, p : L2TableDescriptor, v : ::mem::VirtualAddress) {
     
-    let l1Index = v.0 >> MB_SHIFT;
-    let mut newFrame : bool = false;
+    let l1_index = v.0 >> MB_SHIFT;
+    let mut new_frame : bool = false;
     // get physical addresss
     // temporary map it to here using the active page table
-    if ! self.descriptors[l1Index].is_present() {
+    if ! self.descriptors[l1_index].is_present() {
       let frame = frameallocator.allocate(1).unwrap();
-      self.descriptors[l1Index] = L1TableDescriptor::new(frame);
-      newFrame = true;
+      self.descriptors[l1_index] = L1TableDescriptor::new(frame);
+      new_frame = true;
     }
 
-    let l2phy = self.descriptors[l1Index].get_physical_address();
+    let l2phy = self.descriptors[l1_index].get_physical_address();
 
     // SHOULD WE FLUSH CASHES HERE?
     
@@ -498,7 +498,7 @@ impl PageTable {
     // 4 is the tmp map itself
     // 5 is free!
     const FREE_INDEX : usize = 5;
-    self.tmpMap[FREE_INDEX] = L2TableDescriptor::new(l2phy);
+    self.tmp_map[FREE_INDEX] = L2TableDescriptor::new(l2phy);
 
     // TODO: find the frame for l2, and temporary map it..
     // and add teh mapping
@@ -510,7 +510,7 @@ impl PageTable {
     
     let mapped_address = L1_VIRT_ADDRESS.offset((FREE_INDEX*PAGE_SIZE) as isize);
     // new frame.. zero it
-    if newFrame {
+    if new_frame {
       for i in (0..PAGE_SIZE).step_by(4) {
         unsafe{*(mapped_address.uoffset(i).0 as *mut u32) = 0};
       }
@@ -519,9 +519,9 @@ impl PageTable {
     // frame now available here:
     let mut l2_for_phy = unsafe{ L2Table::from_virt_address(mapped_address)};
 
-    let l2Index = (v.0 >> PAGE_SHIFT) & 0xFF;
+    let l2_index = (v.0 >> PAGE_SHIFT) & 0xFF;
 
-    l2_for_phy[l2Index] = p;
+    l2_for_phy[l2_index] = p;
 
     cpu::memory_write_barrier();
     cpu::invalidate_caches();
@@ -532,7 +532,7 @@ impl PageTable {
 impl ::mem::MemoryMapper for PageTable {
 
   fn map(&mut self, fa : &mut FrameAllocator, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress, size : MemorySize) -> Result<(), ()> {
-    let pages = ::mem::toPages(size).ok().unwrap();
+    let pages = ::mem::to_pages(size).ok().unwrap();
     for i in 0..pages {
       self.map_single(fa, p.uoffset(i<<PAGE_SHIFT), v.uoffset(i<<PAGE_SHIFT));
     }
@@ -542,40 +542,39 @@ impl ::mem::MemoryMapper for PageTable {
 
 // TODO add 1mb section; to help speed up things up!
   fn map_device(&mut self, frameallocator : & mut ::mem::FrameAllocator, p : ::mem::PhysicalAddress, v : ::mem::VirtualAddress, size : MemorySize) -> Result<(), ()> {
-    let pages = ::mem::toPages(size).ok().unwrap();
-    let bytes = ::mem::toBytes(size);
-    let endPhysical = p.uoffset(pages << PAGE_SHIFT);
+    let pages = ::mem::to_pages(size).ok().unwrap();
+    let bytes = ::mem::to_bytes(size);
+    let end_physical = p.uoffset(pages << PAGE_SHIFT);
 
-    let bytesBeforeMb = mb_up(p.0) - p.0;
-    let bytesAfterMb = endPhysical.0 - mb_down(endPhysical.0);
-    let bytesMb = bytes - bytesAfterMb - bytesBeforeMb;
+    let bytes_before_mb = mb_up(p.0) - p.0;
+    let bytes_after_mb = end_physical.0 - mb_down(end_physical.0);
 
-    let pagesBeforeMb = bytesBeforeMb >> PAGE_SHIFT;
-    let Mbs = bytes >> MB_SHIFT;
-    let pagesAfterMb = bytesAfterMb >> PAGE_SHIFT;
+    let pages_before_mb = bytes_before_mb >> PAGE_SHIFT;
+    let mega_bytes = bytes >> MB_SHIFT;
+    let pages_after_mb = bytes_after_mb >> PAGE_SHIFT;
 
-    let mut currOffset : usize = 0;
+    let mut curr_offset : usize = 0;
 
-    for i in 0..pagesBeforeMb {
-      self.map_single_descriptor(frameallocator, L2TableDescriptor::new_device(p.uoffset(currOffset)), v.uoffset(currOffset));
-      currOffset += PAGE_SIZE;
+    for _ in 0..pages_before_mb {
+      self.map_single_descriptor(frameallocator, L2TableDescriptor::new_device(p.uoffset(curr_offset)), v.uoffset(curr_offset));
+      curr_offset += PAGE_SIZE;
     }
 
-    for i in 0..Mbs {
-      let l1Index = v.uoffset(currOffset).0 >> MB_SHIFT;
-      self.descriptors[l1Index] = L1TableDescriptor::new_section(p.uoffset(currOffset), false);
-      currOffset += MB_SIZE;
+    for _ in 0..mega_bytes {
+      let l1_index = v.uoffset(curr_offset).0 >> MB_SHIFT;
+      self.descriptors[l1_index] = L1TableDescriptor::new_section(p.uoffset(curr_offset), false);
+      curr_offset += MB_SIZE;
     }
 
-    for i in 0..pagesAfterMb {
-      self.map_single_descriptor(frameallocator, L2TableDescriptor::new_device(p.uoffset(currOffset)), v.uoffset(currOffset));
-      currOffset += PAGE_SIZE;
+    for _ in 0..pages_after_mb {
+      self.map_single_descriptor(frameallocator, L2TableDescriptor::new_device(p.uoffset(curr_offset)), v.uoffset(curr_offset));
+      curr_offset += PAGE_SIZE;
     }
 
     Ok(())
   }
   
-  fn unmap(&mut self, fa : &mut FrameAllocator, v : ::mem::VirtualAddress, size : MemorySize) -> Result<(), ()>{
+  fn unmap(&mut self, _ : &mut FrameAllocator, _ : ::mem::VirtualAddress, _ : MemorySize) -> Result<(), ()>{
     unimplemented!();
   }
 
@@ -600,7 +599,7 @@ impl ::mem::MemoryMapper for PageTable {
 
         // TODO!
       const FREE_INDEX : usize = 5;
-      self.tmpMap[FREE_INDEX] = L2TableDescriptor::new(l2phy);
+      self.tmp_map[FREE_INDEX] = L2TableDescriptor::new(l2phy);
 
       cpu::memory_write_barrier();
       cpu::invalidate_caches();
@@ -623,8 +622,8 @@ impl ::mem::MemoryMapper for PageTable {
 
   fn v2p(&mut self, v : ::mem::VirtualAddress) ->  Option<::mem::PhysicalAddress> {
 
-    let l1Index = v.0 >> MB_SHIFT;
-    let l1descriptor = &self.descriptors[l1Index];
+    let l1_index = v.0 >> MB_SHIFT;
+    let l1descriptor = &self.descriptors[l1_index];
     if ! l1descriptor.is_present() {
       return None;
     }
@@ -638,7 +637,7 @@ impl ::mem::MemoryMapper for PageTable {
 
     // map the l2 table
     const FREE_INDEX : usize = 5;
-    self.tmpMap[FREE_INDEX] = L2TableDescriptor::new(l1descriptor.get_physical_address());
+    self.tmp_map[FREE_INDEX] = L2TableDescriptor::new(l1descriptor.get_physical_address());
 
     cpu::memory_write_barrier();
     cpu::invalidate_caches();
@@ -647,10 +646,10 @@ impl ::mem::MemoryMapper for PageTable {
 
     let mapped_address = L1_VIRT_ADDRESS.uoffset(FREE_INDEX << PAGE_SHIFT);
     // frame now available here:
-    let mut l2_for_phy = unsafe{ L2Table::from_virt_address(mapped_address)};
+    let l2_for_phy = unsafe{ L2Table::from_virt_address(mapped_address)};
 
-    let l2Index = (v.0 >> PAGE_SHIFT) & 0xFF;
-    let l2descriptor = &l2_for_phy.descriptors[l2Index];
+    let l2_index = (v.0 >> PAGE_SHIFT) & 0xFF;
+    let l2descriptor = &l2_for_phy.descriptors[l2_index];
     if ! l2descriptor.is_present() {
       return None;
     }
@@ -667,7 +666,7 @@ impl ::mem::MemoryMapper for PageTable {
 impl L1Table {
 
   unsafe fn from_virt_address(v : ::mem::VirtualAddress) -> L1Table {
-    let slice : &'static mut [L1TableDescriptor] = unsafe{slice::from_raw_parts_mut(v.0 as *mut L1TableDescriptor, L1TABLE_ENTRIES)};
+    let slice : &'static mut [L1TableDescriptor] = slice::from_raw_parts_mut(v.0 as *mut L1TableDescriptor, L1TABLE_ENTRIES);
     L1Table{
       descriptors : slice
     }
@@ -680,7 +679,7 @@ impl L1Table {
 impl L2Table {
 
   unsafe fn from_virt_address(v : ::mem::VirtualAddress) -> L2Table {
-    let slice : &'static mut [L2TableDescriptor] = unsafe{slice::from_raw_parts_mut(v.0 as *mut L2TableDescriptor, L2TABLE_ENTRIES)};
+    let slice : &'static mut [L2TableDescriptor] = slice::from_raw_parts_mut(v.0 as *mut L2TableDescriptor, L2TABLE_ENTRIES);
     L2Table{
       descriptors : slice
     }  

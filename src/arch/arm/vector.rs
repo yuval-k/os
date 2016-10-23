@@ -1,5 +1,4 @@
 use core::slice;
-use core::mem;
 use super::cpu;
 use super::thread::Context;
 use platform;
@@ -174,26 +173,26 @@ impl VectorTable {
     }
 }
 
-fn vector_reset_handler(ctx : &mut Context){
+fn vector_reset_handler(_ : &mut Context){
 
     // TODO : call scheduler
     loop{};
 
 }
 
-fn vector_undefined_handler(ctx : &mut Context){
+fn vector_undefined_handler(_ : &mut Context){
     loop{};
 }
 
-fn vector_softint_handler(ctx : &mut Context){
+fn vector_softint_handler(_ : &mut Context){
     loop{};
 }
 
-fn vector_prefetch_abort_handler(ctx : &mut Context) {
+fn vector_prefetch_abort_handler(_ : &mut Context) {
     loop{};
 }
 
-fn vector_data_abort_handler(ctx : &mut Context){
+fn vector_data_abort_handler(_ : &mut Context){
     loop{};
 }
 
@@ -205,6 +204,6 @@ fn vector_irq_handler(ctx : &mut Context){
     }
 }
 
-fn vector_fiq_handler(ctx : & Context) -> Option<Context> {
+fn vector_fiq_handler(_ : & Context) -> Option<Context> {
     loop{}
 }
