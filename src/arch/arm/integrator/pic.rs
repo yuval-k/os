@@ -83,7 +83,7 @@ impl platform::InterruptSource for PIC {
     fn interrupted(&self, ctx: &mut platform::Context) {
         let status = self.interrupt_status();
 
-        if status.contains(TIMERINT0) {
+        if status.contains(TIMERINT1) {
             if let Some(ref callback) = self.callback {
                 callback.interrupted(ctx);
             }

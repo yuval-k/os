@@ -108,7 +108,7 @@ pub fn init_integrator(mapper: &mut ::mem::MemoryMapper,
 
 
     pic_.add_timer_callback(tmr);
-    pic_.enable_interrupts(pic::TIMERINT0);
+    pic_.enable_interrupts(pic::TIMERINT1);
 
     // TODO not move the pic to the vector table.
     vector::get_vec_table().set_irq_callback(pic_);
