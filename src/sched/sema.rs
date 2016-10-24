@@ -64,9 +64,10 @@ impl SemaphoreImpl {
         if self.counter.get() > 0 {
             self.counter.set(self.counter.get() - 1);
         } else {
+            let cur_th = platform::get_platform_services().get_scheduler().get_current_thread();
             self.waiting
                 .borrow_mut()
-                .push_back(platform::get_platform_services().get_scheduler().get_current_thread());
+                .push_back(cur_th);
             platform::get_platform_services().get_scheduler().block_no_intr();
         }
     }

@@ -103,9 +103,13 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
             .get_scheduler()
             .spawn(stack2.uoffset(platform::PAGE_SIZE), move || {
                 loop{
-                    platform::write_to_console("t2 releasing semaphore");
+                    platform::write_to_console("t2 acquire semaphore");
                     sema.acquire();
+
+                    platform::write_to_console("t2 sleep");
                     platform::get_platform_services().get_scheduler().sleep(1000);
+
+                    platform::write_to_console("t2 releasing semaphore");
                     sema.release();
                 }
             });
