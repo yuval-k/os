@@ -189,13 +189,13 @@ impl Sched {
 
     fn yeild_thread_no_intr(&self) {
 
-        let curr_thread = self.sched_impl.borrow().curr_thread_index;
+        let curr_thread = { self.sched_impl.borrow().curr_thread_index };
 
         // TODO: should we add a mutex for smp?
 
         let new_context = self.schedule_new();
 
-        let new_thread = self.sched_impl.borrow().curr_thread_index;
+        let new_thread = { self.sched_impl.borrow().curr_thread_index };
 
 
         if curr_thread != new_thread {
@@ -276,9 +276,10 @@ impl platform::InterruptSource for Sched {
     // this method is called platform::ticks_in_second times a second
     fn interrupted(&self, ctx: &mut platform::Context) {
         const DELTA_MILLIS: u64= (1000 / platform::ticks_in_second) as u64;
-        
-        let mut simpl = self.sched_impl.borrow_mut();
-        simpl.time_since_boot_millies +=  DELTA_MILLIS;
+        {
+            let mut simpl = self.sched_impl.borrow_mut();
+            simpl.time_since_boot_millies +=  DELTA_MILLIS;
+        }
         *ctx = self.schedule_no_intr(ctx);
     }
 }
