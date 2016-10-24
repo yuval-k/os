@@ -1,7 +1,7 @@
 
 // NOTE: DO NOT change struct without changing the inline assembly in switch_context
 #[repr(C, packed)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Context {
     pub r0: u32,
     pub r1: u32,

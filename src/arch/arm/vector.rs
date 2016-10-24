@@ -193,7 +193,15 @@ fn vector_prefetch_abort_handler(_: &mut Context) {
     loop {}
 }
 
-fn vector_data_abort_handler(_: &mut Context) {
+fn vector_data_abort_handler(ctx: &mut Context) {
+    use collections::String;
+    use core::fmt::Write;
+
+    platform::write_to_console("Data abort!");
+    let mut w = String::new();
+    write!(&mut w, "Context: {:?}", ctx);
+    platform::write_to_console(&w);
+
     loop {}
 }
 
