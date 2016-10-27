@@ -139,7 +139,7 @@ pub extern "C" fn stub_main() -> ! {
             push {$7}
             b $0 "
             :: 
-            "i"(::arch::arm::integrator::integrator_main as extern "C" fn(_,_,_,_,_,_,_) -> !),
+            "i"(super::integrator_main as extern "C" fn(_,_,_,_,_,_,_) -> !),
             "r"(STACK_POINTER_END),
             "r"(stack_pointer_end_phy),
             "r"(kernel_start_phy),

@@ -3,6 +3,7 @@ name = "os"
 version = "0.1.0"
 authors = ["Kohavi, Yuval <yuval.kohavi@gmail.com>"]
 
+
 [dependencies]
 rlibc = "1.0.0"
 bitflags = "0.7.0"
@@ -19,3 +20,8 @@ panic = "abort"
 
 [lib]
 crate-type = ["staticlib"]
+
+[features]
+multicpu = []
+board-integrator = []
+board-rpi2 = []

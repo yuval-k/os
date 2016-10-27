@@ -12,7 +12,7 @@ pub struct SemaphoreGuard<'a> {
 }
 
 struct SemaphoreImpl {
-    waiting: RefCell<VecDeque<super::ThreadId>>,
+    waiting: RefCell<VecDeque<platform::ThreadId>>,
     counter: Cell<usize>,
 }
 

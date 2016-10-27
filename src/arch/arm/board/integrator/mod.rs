@@ -4,8 +4,8 @@ pub mod timer;
 pub mod stub;
 
 use core::ops;
-use super::mem;
-use super::vector;
+use super::super::mem;
+use super::super::vector;
 
 use collections::boxed::Box;
 use alloc::rc::Rc;
@@ -92,7 +92,7 @@ pub struct PlatformServices {
 }
 
 // This function should be called when we have a heap and a scheduler.
-pub fn init_integrator(mapper: &mut ::mem::MemoryMapper,
+pub fn init_board(mapper: &mut ::mem::MemoryMapper,
                        sched_intr: Rc<platform::InterruptSource>)
                        -> PlatformServices {
 

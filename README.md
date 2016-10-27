@@ -40,3 +40,10 @@ Stub:
 builds page table - identity page table for itself and devices, and proper virtual table for the kernel.
 kernel will later remove the stub and remap memory
 
+# Resources:
+https://qemu.weilnetz.de/test/system/arm/raspberry-pi/ | http://repo.or.cz/w/qemu/ar7.git/
+https://github.com/0xabu/qemu
+http://wiki.osdev.org/ARM_Integrator-CP_IRQTimerAndPICAndTaskSwitch
+http://wiki.osdev.org/User:Pancakes/arm_qemu_realview-pb-a
+http://www.cl.cam.ac.uk/projects/raspberrypi/tutorials/os/
+https://github.com/rsta2/circle

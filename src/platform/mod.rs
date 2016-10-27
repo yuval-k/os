@@ -1,20 +1,24 @@
 pub mod intr;
+pub mod syscalls;
 
 #[cfg(target_arch = "arm")]
 mod arm;
 #[cfg(target_arch = "arm")]
 pub use self::arm::*;
 
-use alloc::rc::Rc;
-use core::cell::UnsafeCell;
-
 pub const PAGE_SIZE: usize = 1 << PAGE_SHIFT;
 pub const PAGE_MASK: usize = PAGE_SIZE - 1;
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct ThreadId(pub usize);
 
 pub trait InterruptSource {
     // must be safe for concurrent calls.
     fn interrupted(&self, &mut Context);
 }
+
+use alloc::rc::Rc;
+use core::cell::UnsafeCell;
 
 pub struct PlatformServices {
     pub scheduler: Rc<super::sched::Sched>,

@@ -1,5 +1,6 @@
 
-pub mod integrator;
+pub mod board;
+
 
 pub mod vector;
 pub mod mem;
@@ -12,9 +13,9 @@ use platform;
 
 use ::mem::MemoryMapper;
 
-pub use self::integrator::write_to_console;
+pub use self::board::write_to_console;
 
-pub use self::integrator::ticks_in_second;
+pub use self::board::ticks_in_second;
 
 
 pub fn build_mode_stacks(mapper: &mut ::mem::MemoryMapper,
@@ -78,7 +79,7 @@ pub fn arm_main<T: ::mem::FrameAllocator>(mut mapper: self::mem::PageTable,
                          _: &mut T,
                          sched_intr: Rc<platform::InterruptSource>| {
 
-        let board_services = self::integrator::init_integrator(mm as &mut MemoryMapper, sched_intr);
+        let board_services = self::board::init_board(mm as &mut MemoryMapper, sched_intr);
 
         // init board
         PlatformServices { board_services: board_services }
@@ -89,7 +90,7 @@ pub fn arm_main<T: ::mem::FrameAllocator>(mut mapper: self::mem::PageTable,
 }
 
 pub struct PlatformServices {
-    board_services: self::integrator::PlatformServices,
+    board_services: self::board::PlatformServices,
 }
 
 

@@ -7,11 +7,11 @@ use core::cell::Cell;
 use super::platform;
 use alloc::boxed::FnBox;
 
+use platform::ThreadId;
+
 
 type C = super::platform::Context;
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub struct ThreadId(pub usize);
 
 const WAKE_NEVER: u64 = 0xFFFFFFFF_FFFFFFFF;
 

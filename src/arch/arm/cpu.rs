@@ -25,8 +25,7 @@ pub fn invalidate_caches() {
     // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0360e/I1014942.html
     // Invalidate Both Caches. Also flushes the branch target cache
     unsafe {
-        asm!("mcr     p15, 0, $0, c7, c7, 0"  ::"r"(0)::"volatile"
-      )
+        asm!("mcr p15, 0, $0, c7, c7, 0"  ::"r"(0)::"volatile")
     }
 }
 
@@ -36,8 +35,7 @@ pub fn invalidate_tlb() {
     // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0344k/I1001599.html
     // Invalidate Inst-TLB and Data-TLB
     unsafe {
-        asm!("mcr     p15, 0, $0, c8, c7, 0"  ::"r"(0)::"volatile"
-      )
+        asm!("mcr p15, 0, $0, c8, c7, 0"  ::"r"(0)::"volatile")
     }
 }
 
@@ -45,8 +43,7 @@ pub fn invalidate_tlb() {
 pub fn data_synchronization_barrier() {
     unsafe {
         // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0344k/I1001599.html
-        asm!("MCR p15, 0, $0, c7, c10, 4"::"r"(0)::"volatile"
-      )
+        asm!("mcr p15, 0, $0, c7, c10, 4"::"r"(0)::"volatile")
     }
 }
 
@@ -54,8 +51,7 @@ pub fn data_synchronization_barrier() {
 pub fn data_memory_barrier() {
     unsafe {
         // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0344k/I1001599.html
-        asm!("MCR p15, 0, $0, c7, c10, 5"::"r"(0)::"volatile"
-      )
+        asm!("mcr p15, 0, $0, c7, c10, 5"::"r"(0)::"volatile")
     }
 }
 
@@ -64,8 +60,7 @@ pub fn set_ttb0(page_table: *const ()) {
     // Set Translation Table Base 0 (TTB0)
     unsafe {
         asm!("mcr p15, 0, $0, c2, c0, 0"
-          :: "r"(page_table as u32) :: "volatile"
-          );
+          :: "r"(page_table as u32) :: "volatile");
 
     }
 }
@@ -75,8 +70,7 @@ pub fn set_ttb1(page_table: *const ()) {
     // Set Translation Table Base 0 (TTB0)
     unsafe {
         asm!("mcr p15, 0, $0, c2, c0, 1"
-          :: "r"(page_table as u32) :: "volatile"
-          );
+          :: "r"(page_table as u32) :: "volatile");
 
     }
 }
@@ -102,9 +96,7 @@ pub fn get_ttbcr() -> u32 {
 #[inline(always)]
 pub fn write_domain_access_control_register(dcr: u32) {
     unsafe {
-        asm!("mcr p15, 0, $0, c3, c0, 0"
-          :: "r"(dcr) :: "volatile"
-          );
+        asm!("mcr p15, 0, $0, c3, c0, 0" :: "r"(dcr) :: "volatile");
     }
 }
 
@@ -115,9 +107,7 @@ pub fn write_domain_access_control_register(dcr: u32) {
 fn get_p15_c1() -> u32 {
     let mut cr: u32;
     unsafe {
-        asm!("mcr p15, 0, $0, c1, c0, 0"
-          : "=r"(cr)
-          );
+        asm!("mcr p15, 0, $0, c1, c0, 0" : "=r"(cr));
     }
     return cr;
 }
@@ -126,9 +116,7 @@ fn get_p15_c1() -> u32 {
 
 fn set_p15_c1(cr: u32) {
     unsafe {
-        asm!("mcr p15, 0, $0, c1, c0, 0"
-          :: "r"(cr) :: "volatile"
-          );
+        asm!("mcr p15, 0, $0, c1, c0, 0" :: "r"(cr) :: "volatile");
     }
 }
 
@@ -196,7 +184,7 @@ pub fn disable_interrupts() {
             :: 
             "i"(DISABLE_FIQ | DISABLE_IRQ)
             : "r0", "cpsr" : "volatile"
-      )
+        )
     }
 }
 
@@ -209,7 +197,7 @@ pub fn enable_interrupts() {
             :: 
             "i"(DISABLE_FIQ | DISABLE_IRQ)
             : "r0", "cpsr" : "volatile"
-      )
+        )
     }
 }
 
@@ -219,7 +207,8 @@ pub fn wait_for_interrupts() {
         asm!("loop:
             mcr p15, 0, $0, c7, c0, 4
             b loop
-            "::"r"(0)::"volatile")
+            "::"r"(0)::"volatile"
+            )
     }
 }
 
@@ -240,18 +229,14 @@ pub fn get_interrupts() -> bool {
 pub fn get_cpsr() -> u32 {
     let mut cpsr: u32;
     unsafe {
-        asm!("mrs $0, cpsr"
-          : "=r"(cpsr)
-          );
+        asm!("mrs $0, cpsr" : "=r"(cpsr));
     }
     return cpsr;
 }
 
 pub fn set_cpsr(cpsr: u32) {
     unsafe {
-        asm!("msr cpsr, $0"
-          :: "r"(cpsr) :: "volatile"
-          );
+        asm!("msr cpsr, $0" :: "r"(cpsr) :: "volatile");
     }
 }
 
@@ -259,18 +244,14 @@ pub fn set_cpsr(cpsr: u32) {
 pub fn get_spsr() -> u32 {
     let mut spsr: u32;
     unsafe {
-        asm!("mrs $0, spsr"
-          : "=r"(spsr)
-          );
+        asm!("mrs $0, spsr" : "=r"(spsr));
     }
     return spsr;
 }
 
 pub fn set_spsr(spsr: u32) {
     unsafe {
-        asm!("msr spsr, $0"
-          :: "r"(spsr) :: "volatile"
-          );
+        asm!("msr spsr, $0" :: "r"(spsr) :: "volatile");
     }
 }
 
@@ -307,8 +288,8 @@ pub fn get_r13r14(spsr: u32) -> (u32, u32) {
         mov $0, r3
         mov $1, r4
         "
-          : "=r"(r13), "=r"(r14): "r"(tocpsr) , "r"(cpsr) : "r0", "r1","r3", "r4": "volatile"
-          );
+        : "=r"(r13), "=r"(r14): "r"(tocpsr) , "r"(cpsr) : "r0", "r1","r3", "r4" : "volatile"
+        );
     }
 
     return (r13, r14);
@@ -342,7 +323,16 @@ pub fn set_r13r14(spsr: u32, r13: u32, r14: u32) {
         mov lr, r4
         msr cpsr, r1
         "
-          :: "r"(r13), "r"(r14), "r"(tocpsr) , "r"(cpsr) : "r0", "r1","r3", "r4": "volatile"
+        :: "r"(r13), "r"(r14), "r"(tocpsr) , "r"(cpsr) : "r0", "r1","r3", "r4": "volatile"
+        );
+    }
+}
+
+pub fn set_vector_table(vector_table: u32) {
+    unsafe {
+        // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0204h/Cihfifej.html
+        asm!("mcr p15, 0, $0, c12, c0, 0 "
+          :: "r"(vector_table) :: "volatile"
           );
     }
 }
