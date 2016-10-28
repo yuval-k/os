@@ -55,6 +55,8 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
     let mut freed_ranges: [Option<ops::Range<::mem::PhysicalAddress>>; 10] =
         [None, None, None, None, None, None, None, None, None, None];
 
+
+
     let mut frame_allocator =
         mem::LameFrameAllocator::new(&skip_ranges, &mut freed_ranges, 1 << 27);
 
@@ -95,6 +97,7 @@ pub struct PlatformServices {
 pub fn init_board(mapper: &mut ::mem::MemoryMapper,
                        sched_intr: Rc<platform::InterruptSource>)
                        -> PlatformServices {
+
 
     PlatformServices{
     //    pic: pic_

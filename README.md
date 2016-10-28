@@ -47,3 +47,7 @@ http://wiki.osdev.org/ARM_Integrator-CP_IRQTimerAndPICAndTaskSwitch
 http://wiki.osdev.org/User:Pancakes/arm_qemu_realview-pb-a
 http://www.cl.cam.ac.uk/projects/raspberrypi/tutorials/os/
 https://github.com/rsta2/circle
+
+http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dai0425/ch04s07s01.html
+
+migration: http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dai0425/BABCDDJG.html

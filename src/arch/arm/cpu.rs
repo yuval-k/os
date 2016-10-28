@@ -114,7 +114,7 @@ fn get_p15_c1() -> u32 {
 
 #[inline(always)]
 
-fn set_p15_c1(cr: u32) {
+fn set_system_control_register(cr: u32) {
     unsafe {
         asm!("mcr p15, 0, $0, c1, c0, 0" :: "r"(cr) :: "volatile");
     }
@@ -139,7 +139,7 @@ pub fn enable_mmu() {
     // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0360f/BGEIHGIF.html
     cr |= XP_BIT;
 
-    set_p15_c1(cr);
+    set_system_control_register(cr);
 }
 
 

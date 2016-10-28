@@ -62,6 +62,7 @@ debugosx: build
 .PHONY: container
 container:
 	docker build -t arm-cross-tools tools/arm-cross-tools
+	docker build -t qemu-rpi tools/qemu
 # cargo:
 # 	cargo build --target $(TARGET)
 #	cargo rustc --target $(TARGET) -- -Z no-landing-pads
