@@ -61,6 +61,10 @@ impl SemaphoreImpl {
         // protect with spin lock:
         // call scheduler to wake up potential sleeping threads
         // http://www.mpi-sws.org/~druschel/courses/os/lectures/proc4.pdf
+
+        // TODO add memory barriers / sync barriers
+        // see : http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.faqs/ka14041.html
+
         if self.counter.get() > 0 {
             self.counter.set(self.counter.get() - 1);
         } else {

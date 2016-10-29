@@ -1,14 +1,18 @@
-TARGET ?= arm-unknown-linux-gnueabi
 LIB_COMPILER=$(shell find  ~/.multirust -name $(TARGET))/lib/libcompiler_builtins*.rlib
 CROSS_TOOL_TARGET ?= arm-none-eabi
 ARCH=arm
+
+TARGET ?= armv7-unknown-linux-gnueabihf
 BOARD=rpi2
 MACHINE=raspi2
 QEMU=docker run -t -i --rm -v $(shell pwd):$(shell pwd):ro --workdir $(shell pwd)   qemu-rpi /ar7/arm-softmmu/qemu-system-arm
+RUSTCFLAGS=
+
+# TARGET ?= arm-unknown-linux-gnueabi
 # BOARD=integrator
 # MACHINE=integratorcp -cpu arm1176
 # QEMU=qemu-system-arm
-
+# RUSTCFLAGS=-Ctarget-cpu=arm1176jz-s
 linker_script=src/arch/$(ARCH)/board/$(BOARD)/linker.ld
 stub=src/arch/$(ARCH)/board/$(BOARD)/stub.S 
 stub_object=target/$(TARGET)/stub.o
@@ -38,7 +42,7 @@ $(os_lib): cargo
 
 cargo:
 	# see here: https://mail.mozilla.org/pipermail/rust-dev/2014-March/009153.html
-	cargo rustc --features board-$(BOARD) --target=$(TARGET) -- -Ctarget-cpu=arm1176jz-s 
+	cargo rustc --features board-$(BOARD) --target=$(TARGET) -- $(RUSTCFLAGS) 
 
 $(stub_object): $(stub)
 	$(CPP) $(stub) |  $(AS)  -o $(stub_object)

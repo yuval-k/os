@@ -1,3 +1,14 @@
+#[cfg(feature = "armv6")]
+pub mod armv6;
+#[cfg(feature = "armv6")]
+pub use self::armv6::*;
+
+#[cfg(feature = "armv7")]
+pub mod armv7;
+#[cfg(feature = "armv7")]
+pub use self::armv7::*;
+
+
 pub const USER_MODE: u32 = 0b10000;
 pub const FIQ_MODE: u32 = 0b10001;
 pub const IRQ_MODE: u32 = 0b10010;
@@ -36,22 +47,6 @@ pub fn invalidate_tlb() {
     // Invalidate Inst-TLB and Data-TLB
     unsafe {
         asm!("mcr p15, 0, $0, c8, c7, 0"  ::"r"(0)::"volatile")
-    }
-}
-
-#[inline(always)]
-pub fn data_synchronization_barrier() {
-    unsafe {
-        // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0344k/I1001599.html
-        asm!("mcr p15, 0, $0, c7, c10, 4"::"r"(0)::"volatile")
-    }
-}
-
-#[inline(always)]
-pub fn data_memory_barrier() {
-    unsafe {
-        // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0344k/I1001599.html
-        asm!("mcr p15, 0, $0, c7, c10, 5"::"r"(0)::"volatile")
     }
 }
 
@@ -198,17 +193,6 @@ pub fn enable_interrupts() {
             "i"(DISABLE_FIQ | DISABLE_IRQ)
             : "r0", "cpsr" : "volatile"
         )
-    }
-}
-
-#[naked]
-pub fn wait_for_interrupts() {
-    unsafe {
-        asm!("loop:
-            mcr p15, 0, $0, c7, c0, 4
-            b loop
-            "::"r"(0)::"volatile"
-            )
     }
 }
 
