@@ -5,7 +5,7 @@ ARCH=arm
 TARGET ?= armv7-unknown-linux-gnueabihf
 BOARD=rpi2
 MACHINE=raspi2
-QEMU=docker run -t -i --rm -v $(shell pwd):$(shell pwd):ro --workdir $(shell pwd)   qemu-rpi /ar7/arm-softmmu/qemu-system-arm
+QEMU=docker run -t -i --net host --rm -v $(shell pwd):$(shell pwd):ro --workdir $(shell pwd)   qemu-rpi /ar7/arm-softmmu/qemu-system-arm
 RUSTCFLAGS=
 
 # TARGET ?= arm-unknown-linux-gnueabi
@@ -56,7 +56,7 @@ target/kernel.img: $(os_lib) $(linker_script) $(stub_object) $(glue_object)
 
 build: cargo target/kernel.img
 
-debugosx: build
+debugosx: build container
 	# qemu-system-arm -machine versatilepb -cpu arm1136 -m 128 -kernel target/kernel.img -s -S&
 	@echo Now use this command to debug:
 	@echo docker run  --rm -t -i -v $(shell pwd):$(shell pwd):ro --net="host" arm-cross-tools

@@ -16,6 +16,11 @@ pub fn data_synchronization_barrier() {
     }
 }
 
+#[inline(always)]
+pub fn get_current_cpu() -> u32 {
+    0
+}
+
 #[inline(never)]
 #[naked]
 pub fn wait_for_interrupts() {

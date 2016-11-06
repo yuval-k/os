@@ -48,6 +48,7 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
 
     let kernel_size = kernel_end_virt - kernel_start_virt;
 
+    // todo: add stub to skip ranges
     let skip_ranges = [down(kernel_start_phy)..up(kernel_start_phy + kernel_size),
                        down(ml.stack_phy.0)..up(sp_end_phy),
                        down(l1table_id)..up(l2table_space_id + 4 * mem::L2TABLE_ENTRIES)];
@@ -60,10 +61,12 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
     let mut frame_allocator =
         mem::LameFrameAllocator::new(&skip_ranges, &mut freed_ranges, 1 << 27);
 
+
     let mut page_table = mem::init_page_table(::mem::VirtualAddress(l1table_id),
                                               ::mem::VirtualAddress(l2table_space_id),
                                               &ml,
                                               &mut frame_allocator);
+     
 
     // map all the gpio
     page_table.map_device(&mut frame_allocator,
@@ -72,7 +75,6 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
                     MMIO_PEND - MMIO_PSTART)
         .unwrap();
 
-    // TODO: figure out how to turn on the ohter CPUs.
 
     unsafe { serial_base = page_table.p2v(serial::SERIAL_BASE_PADDR).unwrap() }
 
@@ -98,6 +100,16 @@ pub fn init_board(mapper: &mut ::mem::MemoryMapper,
                        sched_intr: Rc<platform::InterruptSource>)
                        -> PlatformServices {
 
+    // make frame allocator and 
+    // page table accessible to other CPUs
+
+    // wake up other CPUs!
+
+    // todo: start and wait for other CPUs
+    // todo: once other cpus started, swicthed to use page_table and waiting somewhere in kernel virtmem, continue
+    // todo: remove stub from skip ranges
+
+    // todo: scheduler should be somewhat available here..
 
     PlatformServices{
     //    pic: pic_
