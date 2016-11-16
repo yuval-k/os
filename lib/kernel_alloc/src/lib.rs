@@ -89,7 +89,11 @@ pub fn init_heap(start: usize, size: usize, get_int: fn() -> bool, set_int: fn(b
 pub extern "C" fn __rust_allocate(size: usize, align: usize) -> *mut u8 {
     unsafe {
         let g = HEAP.as_mut().unwrap().no_interrupts();
-        return g.lock().allocate_first_fit(size, align).expect("out of memory");
+        let mut lockg =  g.lock();
+        let res = lockg.allocate_first_fit(size, align);
+        
+        let allocated_mem = res.expect("out of memory");
+        return allocated_mem;
     }
 }
 

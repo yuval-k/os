@@ -16,6 +16,14 @@ _start:
 1: 
     b 1b @ Halt
 
+_secondary_start:
+    .globl _secondary_start
+    
+    ldr sp, =temp_stub_stack @ Set up the stack
+    bl stub_secondary_core @ Jump to the main function
+1: 
+    b 1b @ Halt
+
 .ltorg
 .section .stub.data
 .align 4

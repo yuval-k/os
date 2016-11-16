@@ -30,18 +30,18 @@ pub fn get_current_cpu() -> u32 {
 
 // thanks https://www.raspberrypi.org/forums/viewtopic.php?f=72&t=11183
 // see http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0464d/BABIEBAC.html
+// http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0438g/CDEDBHDD.html
 #[inline(always)]
 pub fn enable_fpu() {
     unsafe {
         asm!("
             mrc p15, 0, r0, c1, c0, 2
-            orr r0, r0, #0x300000            /* single precision */
-            orr r0, r0, #0xC00000            /* double precision */
+            orr r0, r0, #0xF00000       /* Enable access to CP10 and CP11 */
             mcr p15, 0, r0, c1, c0, 2
+            isb
             mov r0, #0x40000000
-            fmxr fpexc,r0
-            mrc p15, 0, $0, c0, c0, 5
-            " :::"r0":"volatile"  );
+            fmxr fpexc, r0
+            " :::"r0":"volatile");
     }
 }
 

@@ -110,6 +110,7 @@ pub extern "C" fn stub_main() -> ! {
                 i += 1;
             }
         }
+        // TODO: check number of CPUs, and allocate stack for each CPU. 
         {
             let offset = (STACK_POINTER_BEGIN >> 20) as usize;
             let cur_entry: *mut u32 = ((l1table_unsafe as usize) + 4 * offset) as *mut u32;
@@ -164,8 +165,33 @@ pub extern "C" fn stub_main() -> ! {
     }
 }
 
-// interface for page table
-// gets framer
-// then has findnextfreepage
-// map(number of pages) -> virt address
-// if number of available pages == 1 add another l1 entry
+#[no_mangle]
+#[link_section=".stub"]
+pub extern "C" fn stub_secondary_core() -> ! {
+    // TODO init page table from pre-existing pages
+    // After we have a page table, setup stack (do all that in assembly?!) STACK_POINTER_BEGIN + 1mb*cpu_index
+    // we can remap the stack to a page
+    let l1table_unsafe: *const u32 = unsafe { l1pagetable_glue() as *mut _ };
+    cpu::enable_fpu();
+    cpu::write_domain_access_control_register(3);
+    cpu::set_ttb0(l1table_unsafe as *const ());
+    cpu::set_ttb1(l1table_unsafe as *const ());
+    cpu::set_ttbcr(0);
+    cpu::enable_mmu();
+
+    // We should now have access to the stack!
+unsafe {
+        asm!("mov sp, $1
+            b $0 "
+            :: 
+            "i"(super::rpi_multi_main as extern "C" fn() -> !),
+            "r"(super::current_stack)
+            : "sp" : "volatile"
+      )
+    }
+
+
+    unsafe {
+        ::core::intrinsics::unreachable();
+    }
+}

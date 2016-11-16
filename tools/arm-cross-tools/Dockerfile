@@ -4,3 +4,4 @@ RUN apt-get update -y
 
 RUN apt-get install -y make pkg-config git
 RUN apt-get install -y gcc-arm-none-eabi
+RUN apt-get install -y gdb-arm-none-eabi

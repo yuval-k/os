@@ -59,7 +59,7 @@ build: cargo target/kernel.img
 debugosx: build container
 	# qemu-system-arm -machine versatilepb -cpu arm1136 -m 128 -kernel target/kernel.img -s -S&
 	@echo Now use this command to debug:
-	@echo docker run  --rm -t -i -v $(shell pwd):$(shell pwd):ro --net="host" arm-cross-tools
+	@echo docker run  --rm -t -i -v $(shell pwd):$(shell pwd):ro  -v $(shell cd;pwd)/.cargo/registry/src/:$(shell cd;pwd)/.cargo/registry/src/:ro --net="host" arm-cross-tools
 	@echo Followed by:
 	@echo arm-none-eabi-gdb -ex \'target remote 192.168.99.1:1234\' $(shell pwd)/target/kernel.img
 

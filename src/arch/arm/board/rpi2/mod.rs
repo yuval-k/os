@@ -2,6 +2,7 @@ pub mod serial;
 pub mod stub;
 
 use core::ops;
+use core::sync::atomic;
 use super::super::mem;
 use super::super::vector;
 
@@ -14,6 +15,13 @@ use platform;
 use device::serial::SerialMMIO;
 
 pub const ticks_in_second : usize = 20;
+pub const NUM_CPUS : usize = 4;
+
+
+static mut current_stack : usize = 0;
+static cpus_awake: atomic::AtomicUsize = atomic::ATOMIC_USIZE_INIT;
+
+static need_stub : atomic::AtomicUsize = atomic::ATOMIC_USIZE_INIT;
 
 fn up(a: usize) -> ::mem::PhysicalAddress {
     ::mem::PhysicalAddress((a + mem::PAGE_MASK) & (!mem::PAGE_MASK))
@@ -48,7 +56,7 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
 
     let kernel_size = kernel_end_virt - kernel_start_virt;
 
-    // todo: add stub to skip ranges
+    // TODO: add stub to skip ranges
     let skip_ranges = [down(kernel_start_phy)..up(kernel_start_phy + kernel_size),
                        down(ml.stack_phy.0)..up(sp_end_phy),
                        down(l1table_id)..up(l2table_space_id + 4 * mem::L2TABLE_ENTRIES)];
@@ -100,18 +108,64 @@ pub fn init_board(mapper: &mut ::mem::MemoryMapper,
                        sched_intr: Rc<platform::InterruptSource>)
                        -> PlatformServices {
 
-    // make frame allocator and 
-    // page table accessible to other CPUs
+    // TODO: check how many other CPUs we have,
+    // setup a stack of each of them.
 
-    // wake up other CPUs!
 
-    // todo: start and wait for other CPUs
-    // todo: once other cpus started, swicthed to use page_table and waiting somewhere in kernel virtmem, continue
-    // todo: remove stub from skip ranges
+    // TODO: make frame allocator and page table accessible to other CPUs
+    // other cpus will use provisonal l1 page table to access kernel. 
+    // so don't release stub just yet.
 
-    // todo: scheduler should be somewhat available here..
+    // TODO: by here we shouls assume scheduler is active.
+
+    // the other CPUs still need the stub..
+    need_stub.store(NUM_CPUS-1, atomic::Ordering::SeqCst);
+
+    // for 1 .. (cpu-1):
+    //    set stack for CPU
+    //    do memory barrier()
+    //    wake other CPU(i)
+    //    wait for CPU
+    for i in 1 .. NUM_CPUS {
+        unsafe{current_stack = 0x100_0000*i  };
+        ::arch::arm::cpu::memory_write_barrier();
+        // wake up CPU
+        // TODO: WAKE UP CPU
+        // wait for cpu
+        while cpus_awake.load(atomic::Ordering::SeqCst) != i {}
+    }
+          
+
+
+
+    // TODO: start and wait for other CPUs
+    // TODO: once other cpus started, and signaled that they swiched to use page_table and waiting somewhere in kernel virtmem, continue
+    // TODO: remove stub from skip ranges
+
+    // TODO: scheduler should be somewhat available here..
 
     PlatformServices{
     //    pic: pic_
     }
+}
+
+
+#[no_mangle]
+pub extern "C" fn rpi_multi_main() -> ! {
+    // we got to here, that means that the stack 
+    // is no longer the temp stack, and we can continue and init other CPUs
+
+    // notify..
+    cpus_awake.fetch_add(1, atomic::Ordering::SeqCst);
+
+    // init real page table
+    // TODO: !!
+
+    if 1 == need_stub.fetch_sub(1, atomic::Ordering::SeqCst) {
+        // if previous value was one, it means that we are the last one that needed the stub
+        // and we can release it now
+        // TODO: release stub
+    }
+
+    loop{}
 }
