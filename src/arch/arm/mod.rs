@@ -76,10 +76,10 @@ pub fn arm_main<T: ::mem::FrameAllocator>(mut mapper: self::mem::PageTable,
     // undefined instruction to test
     //   unsafe{asm!(".word 0xffffffff" :: :: "volatile");}
     let initplat = move |mm: &mut self::mem::PageTable,
-                         _: &mut T,
+                         fa: &mut T,
                          sched_intr: Rc<platform::InterruptSource>| {
 
-        let board_services = self::board::init_board(mm as &mut MemoryMapper, sched_intr);
+        let board_services = self::board::init_board(mm as &mut MemoryMapper, fa, sched_intr);
 
         // init board
         PlatformServices { board_services: board_services }

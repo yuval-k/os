@@ -29,7 +29,7 @@ This will most likely to fail. as long as it failed after building the assembler
 I called my volume Crosstool, so i build it with:
 
 ```
-export PATH=/Volumes/Crosstool/.build/arm-unknown-linux-gnueabi/buildtools/bin/:$PATH
+export PATH=/Volumes/Crosstool/.build/armv7-unknown-linux-gnueabihf/buildtools/bin/:/Volumes/Crosstool/.build/arm-unknown-linux-gnueabi/buildtools/bin/:$PATH
 make toolchain # do this just once
 make kernel.img
 make emulate
@@ -51,3 +51,11 @@ https://github.com/rsta2/circle
 http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dai0425/ch04s07s01.html
 
 migration: http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dai0425/BABCDDJG.html
+https://github.com/genodelabs/genode
+https://github.com/RIOT-OS/RIOT
+http://stackoverflow.com/questions/28610045/how-to-start-additional-cores-on-the-raspberry-pi-2-under-bare-metal
+
+princeton os course:
+https://www.cs.princeton.edu/courses/archive/fall10/cos318/index.html
+https://www.cs.princeton.edu/courses/archive/fall10/cos318/lectures/MutexImplementation.pdf
+http://kos.enix.org/pub/how_to_bring_smp.html

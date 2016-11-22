@@ -5,13 +5,13 @@ ARCH=arm
 TARGET ?= armv7-unknown-linux-gnueabihf
 BOARD=rpi2
 MACHINE=raspi2
-QEMU=docker run -t -i --net host --rm -v $(shell pwd):$(shell pwd):ro --workdir $(shell pwd)   qemu-rpi /ar7/arm-softmmu/qemu-system-arm
+QEMU=docker run -t -i --net host --rm -v $(shell pwd):$(shell pwd):ro --workdir $(shell pwd) qemu-rpi qemu-system-arm
 RUSTCFLAGS=
 
 # TARGET ?= arm-unknown-linux-gnueabi
 # BOARD=integrator
 # MACHINE=integratorcp -cpu arm1176
-# QEMU=qemu-system-arm
+# QEMU=qemu-system-arm -m 128
 # RUSTCFLAGS=-Ctarget-cpu=arm1176jz-s
 linker_script=src/arch/$(ARCH)/board/$(BOARD)/linker.ld
 stub=src/arch/$(ARCH)/board/$(BOARD)/stub.S 
@@ -33,26 +33,26 @@ toolchain:
 	rustup target add $(TARGET)
 	
 emulate: target/kernel.img
-	$(QEMU) -machine $(MACHINE) -m 128 -kernel target/kernel.img -serial stdio
+	$(QEMU) -machine $(MACHINE) -kernel target/kernel.img -serial stdio
 
 emulate-debug: target/kernel.img
-	$(QEMU) -machine $(MACHINE) -m 128 -kernel target/kernel.img -serial stdio -s -S
+	$(QEMU) -machine $(MACHINE) -kernel target/kernel.img -serial stdio -s -S
 
 $(os_lib): cargo
 
 cargo:
 	# see here: https://mail.mozilla.org/pipermail/rust-dev/2014-March/009153.html
-	cargo rustc --features board-$(BOARD) --target=$(TARGET) -- $(RUSTCFLAGS) 
+	cargo rustc --features board-$(BOARD) --target=$(TARGET) -- -g $(RUSTCFLAGS) 
 
 $(stub_object): $(stub)
-	$(CPP) $(stub) |  $(AS)  -o $(stub_object)
+	$(CPP) $(stub) |  $(AS) -g -o $(stub_object)
 
 $(glue_object): $(glue)
 	$(CC) -Wall -Wextra -Werror -nostdlib -nostartfiles -ffreestanding -std=gnu99 -c $(glue) -o $(glue_object)
 
-target/kernel.img: $(os_lib) $(linker_script) $(stub_object) $(glue_object) 
+target/kernel.img: $(os_lib) $(linker_script) $(stub_object) 
 	$(LD) -n --gc-sections -T $(linker_script) -o target/kernel.img \
-		$(stub_object)  $(glue_object) target/$(TARGET)/debug/libos.a $(LIB_COMPILER)
+		$(stub_object) $(glue_object)  target/$(TARGET)/debug/libos.a $(LIB_COMPILER)
 
 build: cargo target/kernel.img
 
@@ -62,6 +62,10 @@ debugosx: build container
 	@echo docker run  --rm -t -i -v $(shell pwd):$(shell pwd):ro  -v $(shell cd;pwd)/.cargo/registry/src/:$(shell cd;pwd)/.cargo/registry/src/:ro --net="host" arm-cross-tools
 	@echo Followed by:
 	@echo arm-none-eabi-gdb -ex \'target remote 192.168.99.1:1234\' $(shell pwd)/target/kernel.img
+
+.PHONY: clean
+clean:
+	cargo clean
 
 .PHONY: container
 container:

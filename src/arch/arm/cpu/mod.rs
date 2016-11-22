@@ -29,6 +29,10 @@ pub const DISABLE_IRQ: u32 = 1 << 7;
 pub fn memory_write_barrier() {
     data_memory_barrier();
 }
+#[inline(always)]
+pub fn memory_read_barrier() {
+    data_memory_barrier();
+}
 
 #[inline(always)]
 pub fn invalidate_caches() {

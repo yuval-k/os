@@ -93,6 +93,7 @@ pub struct PlatformServices {
 
 // This function should be called when we have a heap and a scheduler.
 pub fn init_board(mapper: &mut ::mem::MemoryMapper,
+                  fa: &mut ::mem::FrameAllocator,
                        sched_intr: Rc<platform::InterruptSource>)
                        -> PlatformServices {
 
