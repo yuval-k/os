@@ -1,5 +1,3 @@
-pub mod sema;
-
 use collections::Vec;
 use collections::boxed::Box;
 use core::cell::RefCell;
@@ -207,6 +205,8 @@ impl Sched {
                 unsafe{ &mut *(&mut t.ctx as *mut C) }
                 // make sure borrow ends before call to switch_context. 
             };
+            // context includes whether or not interrupts are enabled.
+            //TODO: perhaps forbid contex switch with interrupts disabled?
             platform::switch_context(ctx, &new_context);
             // we don't get here :)
         }

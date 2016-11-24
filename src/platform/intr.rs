@@ -34,9 +34,6 @@ pub struct InterruptGuardHelper<'a, T: ?Sized + 'a> {
     data: &'a mut T,
 }
 
-unsafe impl<T: ?Sized + Send> Sync for InterruptGuard<T> {}
-unsafe impl<T: ?Sized + Send> Send for InterruptGuard<T> {}
-
 impl<T> InterruptGuard<T> {
     pub fn new<'a>(user_data: T) -> InterruptGuard<T> {
         InterruptGuard { data: UnsafeCell::new(user_data) }

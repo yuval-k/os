@@ -6,6 +6,7 @@ use core::ops;
 use super::cpu;
 use ::mem::FrameAllocator;
 use ::mem::MemorySize;
+use ::sync;
 
 // contants are auto inlined: https://doc.rust-lang.org/book/const-and-static.html
 pub const PAGE_SHIFT: usize = 12;
@@ -20,16 +21,53 @@ pub const MB_SHIFT: usize = 20;
 pub const MB_SIZE: usize = 1 << MB_SHIFT;
 pub const MB_MASK: usize = MB_SIZE - 1;
 
-pub struct LameFrameAllocator<'a> {
+pub struct LameFrameAllocator {
+    cpu_mutex : sync::CpuMutex<LameFrameAllocatorInner>,
+}
+
+pub struct LameFrameAllocatorInner {
     nextfree: ::mem::PhysicalAddress,
     max: ::mem::PhysicalAddress,
 
-    ranges: &'a [ops::Range<::mem::PhysicalAddress>],
-    free_frames: &'a mut [Option<ops::Range<::mem::PhysicalAddress>>],
+    ranges: [Option<ops::Range<::mem::PhysicalAddress>>;10],
+    free_frames: [Option<ops::Range<::mem::PhysicalAddress>>; 10],
     free_frames_index: usize,
 }
 
-impl<'a> ::mem::FrameAllocator for LameFrameAllocator<'a> {
+impl ::mem::FrameAllocator for LameFrameAllocator {
+    fn allocate(&self, number: usize) -> Option<::mem::PhysicalAddress> {
+        self.cpu_mutex.lock().allocate(number)
+    }
+    fn deallocate(&self, addr: ::mem::PhysicalAddress, size: usize) {
+        self.cpu_mutex.lock().deallocate(addr, size)
+    }
+}
+
+impl LameFrameAllocator{
+    pub fn new(ranges: &[ops::Range<::mem::PhysicalAddress>],
+               max_size: usize)
+               -> LameFrameAllocator{
+        let mut copy_ranges : [Option<ops::Range<::mem::PhysicalAddress>>;10] =  [None, None, None, None, None, None, None, None, None, None];
+        let mut i = 0;
+        for r in ranges {
+            copy_ranges[i] = Some(r.clone());
+            i += 1;
+        }
+
+        LameFrameAllocator{cpu_mutex: sync::CpuMutex::new(
+            LameFrameAllocatorInner {
+                max: ::mem::PhysicalAddress(max_size),
+                nextfree: ::mem::PhysicalAddress(PAGE_SIZE), /* don't allocate frame zero cause the vector table is there.. */
+                ranges: copy_ranges,
+                free_frames: [None, None, None, None, None, None, None, None, None, None],
+                free_frames_index: 0,
+                        }
+                )
+        }
+    }
+}
+
+impl LameFrameAllocatorInner {
     // assume no interrupts here.
     fn allocate(&mut self, number: usize) -> Option<::mem::PhysicalAddress> {
         if self.nextfree >= self.max {
@@ -60,10 +98,12 @@ impl<'a> ::mem::FrameAllocator for LameFrameAllocator<'a> {
 
             let cur_range = cur_free..potential_next;
 
-            for r in self.ranges {
-                if (cur_range.start < r.end) && (r.start < cur_range.end) {
-                    self.nextfree = cmp::max(self.nextfree, r.end);
-                    continue 'outer;
+            for mayber in &self.ranges {
+                if let Some(ref r) = *mayber {
+                    if (cur_range.start < r.end) && (r.start < cur_range.end) {
+                        self.nextfree = cmp::max(self.nextfree, r.end);
+                        continue 'outer;
+                    }
                 }
             }
 
@@ -86,20 +126,7 @@ impl<'a> ::mem::FrameAllocator for LameFrameAllocator<'a> {
             self.free_frames_index += 1;
         }
     }
-}
-impl<'a> LameFrameAllocator<'a> {
-    pub fn new(ranges: &'a [ops::Range<::mem::PhysicalAddress>],
-               free_frames: &'a mut [Option<ops::Range<::mem::PhysicalAddress>>],
-               max_size: usize)
-               -> LameFrameAllocator<'a> {
-        LameFrameAllocator {
-            max: ::mem::PhysicalAddress(max_size),
-            nextfree: ::mem::PhysicalAddress(PAGE_SIZE), /* don't allocate frame zero cause the vector table is there.. */
-            ranges: ranges,
-            free_frames: free_frames,
-            free_frames_index: 0,
-        }
-    }
+
 }
 
 #[repr(packed)]
@@ -288,7 +315,7 @@ pub struct MemLayout {
 }
 
 
-fn get_init_frames(fa: &mut ::mem::FrameAllocator) -> [::mem::PhysicalAddress; 5] {
+fn get_init_frames(fa: & ::mem::FrameAllocator) -> [::mem::PhysicalAddress; 5] {
     const NUM_FRAMES: usize = 7; // guaranteed to have somthing aligned here..
     let mut free_frames: [::mem::PhysicalAddress; 7] = [::mem::PhysicalAddress(0); NUM_FRAMES];
     let pa = fa.allocate(free_frames.len()).unwrap();
@@ -453,7 +480,9 @@ pub fn init_page_table(l1table_identity: ::mem::VirtualAddress,
     let frame_address = L1_VIRT_ADDRESS.uoffset(next_free_l2_index << PAGE_SHIFT);
     let mut stack_l2 = unsafe { L2Table::from_virt_address(frame_address) };
     // TODO: set nx bit
+    // TODO: make stack size a constant and not hard coded
     stack_l2[(sp >> PAGE_SHIFT) & 0xFF] = L2TableDescriptor::new(::mem::PhysicalAddress(spframe));
+    stack_l2[((sp >> PAGE_SHIFT) & 0xFF) + 1] = L2TableDescriptor::new(::mem::PhysicalAddress(spframe + PAGE_SIZE));
 
 
     // turn on new mmu and free the stub memory
@@ -474,32 +503,43 @@ pub fn init_page_table(l1table_identity: ::mem::VirtualAddress,
     cpu::invalidate_caches();
     cpu::invalidate_tlb();
 
-    PageTable {
-        descriptors: newl1,
-        tmp_map: newl2,
+    PageTable{
+        cpu_mutex : sync::CpuMutex::new(PageTableInner {
+            descriptors: newl1,
+            tmp_map: newl2,
+            }
+        )
     }
-
 }
 
 pub struct PageTable {
+    cpu_mutex : sync::CpuMutex<PageTableInner>,
+}
+
+pub struct PageTableInner {
     pub descriptors: L1Table,
     tmp_map: L2Table,
 }
 
-
-impl PageTable {
+impl PageTableInner {
+    // TODO add error handling..
     fn map_single(&mut self,
-                  frameallocator: &mut ::mem::FrameAllocator,
+                  frameallocator: & ::mem::FrameAllocator,
                   p: ::mem::PhysicalAddress,
                   v: ::mem::VirtualAddress) {
         self.map_single_descriptor(frameallocator, L2TableDescriptor::new(p), v)
     }
 
+    fn map_section(&mut self, s: L1TableDescriptor,
+                              v: ::mem::VirtualAddress) {
+        let l1_index = v.0 >> MB_SHIFT;
+        self.descriptors[l1_index] = s;
+    }
+
     fn map_single_descriptor(&mut self,
-                             frameallocator: &mut ::mem::FrameAllocator,
+                             frameallocator: & ::mem::FrameAllocator,
                              p: L2TableDescriptor,
                              v: ::mem::VirtualAddress) {
-
         let l1_index = v.0 >> MB_SHIFT;
         let mut new_frame: bool = false;
         // get physical addresss
@@ -548,73 +588,6 @@ impl PageTable {
         cpu::invalidate_tlb();
         // page should be mapped now
     }
-}
-impl ::mem::MemoryMapper for PageTable {
-    fn map(&mut self,
-           fa: &mut FrameAllocator,
-           p: ::mem::PhysicalAddress,
-           v: ::mem::VirtualAddress,
-           size: MemorySize)
-           -> Result<(), ()> {
-        let pages = ::mem::to_pages(size).ok().unwrap();
-        for i in 0..pages {
-            self.map_single(fa, p.uoffset(i << PAGE_SHIFT), v.uoffset(i << PAGE_SHIFT));
-        }
-
-        Ok(())
-    }
-
-    // TODO add 1mb section; to help speed up things up!
-    fn map_device(&mut self,
-                  frameallocator: &mut ::mem::FrameAllocator,
-                  p: ::mem::PhysicalAddress,
-                  v: ::mem::VirtualAddress,
-                  size: MemorySize)
-                  -> Result<(), ()> {
-        let pages = ::mem::to_pages(size).ok().unwrap();
-        let bytes = ::mem::to_bytes(size);
-        let end_physical = p.uoffset(pages << PAGE_SHIFT);
-
-        let bytes_before_mb = mb_up(p.0) - p.0;
-        let bytes_after_mb = end_physical.0 - mb_down(end_physical.0);
-
-        let pages_before_mb = bytes_before_mb >> PAGE_SHIFT;
-        let mega_bytes = bytes >> MB_SHIFT;
-        let pages_after_mb = bytes_after_mb >> PAGE_SHIFT;
-
-        let mut curr_offset: usize = 0;
-
-        for _ in 0..pages_before_mb {
-            self.map_single_descriptor(frameallocator,
-                                       L2TableDescriptor::new_device(p.uoffset(curr_offset)),
-                                       v.uoffset(curr_offset));
-            curr_offset += PAGE_SIZE;
-        }
-
-        for _ in 0..mega_bytes {
-            let l1_index = v.uoffset(curr_offset).0 >> MB_SHIFT;
-            self.descriptors[l1_index] = L1TableDescriptor::new_section(p.uoffset(curr_offset),
-                                                                        false);
-            curr_offset += MB_SIZE;
-        }
-
-        for _ in 0..pages_after_mb {
-            self.map_single_descriptor(frameallocator,
-                                       L2TableDescriptor::new_device(p.uoffset(curr_offset)),
-                                       v.uoffset(curr_offset));
-            curr_offset += PAGE_SIZE;
-        }
-
-        Ok(())
-    }
-
-    fn unmap(&mut self,
-             _: &mut FrameAllocator,
-             _: ::mem::VirtualAddress,
-             _: MemorySize)
-             -> Result<(), ()> {
-        unimplemented!();
-    }
 
     fn p2v(&mut self, p: ::mem::PhysicalAddress) -> Option<::mem::VirtualAddress> {
         let l1table = self.descriptors.descriptors.iter();
@@ -660,7 +633,6 @@ impl ::mem::MemoryMapper for PageTable {
     }
 
     fn v2p(&mut self, v: ::mem::VirtualAddress) -> Option<::mem::PhysicalAddress> {
-
         let l1_index = v.0 >> MB_SHIFT;
         let l1descriptor = &self.descriptors[l1_index];
         if !l1descriptor.is_present() {
@@ -696,6 +668,84 @@ impl ::mem::MemoryMapper for PageTable {
         let p = ::mem::PhysicalAddress(l2descriptor.get_physical_address().0 | (v.0 & PAGE_MASK));
 
         Some(p)
+    }
+}
+
+impl ::mem::MemoryMapper for PageTable {
+    fn map(&self,
+           fa: &FrameAllocator,
+           p: ::mem::PhysicalAddress,
+           v: ::mem::VirtualAddress,
+           size: MemorySize)
+           -> Result<(), ()> {
+        let pages = ::mem::to_pages(size).ok().unwrap();
+        for i in 0..pages {
+            self.cpu_mutex.lock().map_single(fa, p.uoffset(i << PAGE_SHIFT), v.uoffset(i << PAGE_SHIFT));
+        }
+
+        Ok(())
+    }
+
+    // TODO add 1mb section; to help speed up things up!
+    fn map_device(&self,
+                  frameallocator: &::mem::FrameAllocator,
+                  p: ::mem::PhysicalAddress,
+                  v: ::mem::VirtualAddress,
+                  size: MemorySize)
+                  -> Result<(), ()> {
+        let pages = ::mem::to_pages(size).ok().unwrap();
+        let bytes = ::mem::to_bytes(size);
+        let end_physical = p.uoffset(pages << PAGE_SHIFT);
+
+        let bytes_before_mb = mb_up(p.0) - p.0;
+        let bytes_after_mb = end_physical.0 - mb_down(end_physical.0);
+
+        let pages_before_mb = bytes_before_mb >> PAGE_SHIFT;
+        let mega_bytes = bytes >> MB_SHIFT;
+        let pages_after_mb = bytes_after_mb >> PAGE_SHIFT;
+
+        let mut curr_offset: usize = 0;
+
+        for _ in 0..pages_before_mb {
+            self.cpu_mutex.lock().map_single_descriptor(frameallocator,
+                                       L2TableDescriptor::new_device(p.uoffset(curr_offset)),
+                                       v.uoffset(curr_offset));
+            curr_offset += PAGE_SIZE;
+        }
+
+        for _ in 0..mega_bytes {
+            
+            self.cpu_mutex.lock().map_section(L1TableDescriptor::new_section(
+                                                p.uoffset(curr_offset),
+                                                false), v.uoffset(curr_offset));
+            curr_offset += MB_SIZE;
+        }
+
+        for _ in 0..pages_after_mb {
+            self.cpu_mutex.lock().map_single_descriptor(frameallocator,
+                                       L2TableDescriptor::new_device(p.uoffset(curr_offset)),
+                                       v.uoffset(curr_offset));
+            curr_offset += PAGE_SIZE;
+        }
+
+        Ok(())
+    }
+
+    fn unmap(&self,
+             _: &FrameAllocator,
+             _: ::mem::VirtualAddress,
+             _: MemorySize)
+             -> Result<(), ()> {
+        unimplemented!();
+    }
+}
+impl ::mem::PVMapper for PageTable {
+    fn p2v(&self, p: ::mem::PhysicalAddress) -> Option<::mem::VirtualAddress> {
+        self.cpu_mutex.lock().p2v(p)
+    }
+
+    fn v2p(&self, v: ::mem::VirtualAddress) -> Option<::mem::PhysicalAddress> {
+        self.cpu_mutex.lock().v2p(v)
     }
 }
 

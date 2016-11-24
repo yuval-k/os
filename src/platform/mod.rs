@@ -1,6 +1,10 @@
 pub mod intr;
 pub mod syscalls;
 
+use collections::boxed::Box;
+use alloc::rc::Rc;
+use core::cell::UnsafeCell;
+
 #[cfg(target_arch = "arm")]
 mod arm;
 #[cfg(target_arch = "arm")]
@@ -17,24 +21,33 @@ pub trait InterruptSource {
     fn interrupted(&self, &mut Context);
 }
 
-use alloc::rc::Rc;
-use core::cell::UnsafeCell;
 
 pub struct PlatformServices {
-    pub scheduler: Rc<super::sched::Sched>,
-    pub arch_services: ArchPlatformServices,
+    pub scheduler: super::sched::Sched,
+    pub mem_manager: Box<::mem::MemoryManagaer>, 
+    pub frame_alloc: Rc<::mem::FrameAllocator>,
+    pub arch_services: Option<ArchPlatformServices>,
 }
 
 static mut platform_services: Option<UnsafeCell<PlatformServices>> = None;
 
-pub fn set_platform_services(p: PlatformServices) {
-    unsafe { platform_services = Some(UnsafeCell::new(p)) }
+pub unsafe fn set_platform_services(p: PlatformServices) {
+      platform_services = Some(UnsafeCell::new(p));
 }
 
 pub fn get_platform_services() -> &'static PlatformServices {
     unsafe {
         match platform_services {
             Some(ref x) => &*x.get(),
+            None => panic!(),
+        }
+    }
+}
+
+pub fn get_mut_platform_services() -> &'static mut PlatformServices {
+    unsafe {
+        match platform_services {
+            Some(ref x) => &mut *x.get(),
             None => panic!(),
         }
     }

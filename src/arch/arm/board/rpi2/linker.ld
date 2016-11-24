@@ -98,6 +98,7 @@ SECTIONS
 		*(.bootstack)
 		__init_bss_end = . ;
 	}
+	__bss_end = . ;
 
 	_end = . ;
 	PROVIDE (end = .) ;

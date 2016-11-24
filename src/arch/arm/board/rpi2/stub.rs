@@ -1,7 +1,9 @@
 #![link_section=".stub"]
 
+
 use ::arch::arm::cpu;
 use ::arch::arm::mem;
+use core;
 
 extern "C" {
     fn stub_begin_glue() -> *const usize;
@@ -12,6 +14,7 @@ extern "C" {
     fn l2pagetable_glue() -> *const usize;
 }
 // setup virtual table and jump to rust main
+
 #[no_mangle]
 #[link_section=".stub"]
 pub extern "C" fn stub_main() -> ! {

@@ -7,7 +7,6 @@ pub mod mem;
 pub mod cpu;
 pub mod thread;
 
-use alloc::rc::Rc;
 
 use platform;
 
@@ -52,9 +51,10 @@ fn init_vectors(mapper: &mut ::mem::MemoryMapper,
     build_mode_stacks(mapper, frame_allocator);
 }
 
-pub fn arm_main<T: ::mem::FrameAllocator>(mut mapper: self::mem::PageTable,
-                                          mut frame_allocator: T)
-                                          -> ! {
+pub fn arm_main<F>(mut mapper: self::mem::PageTable,
+                                          mut frame_allocator: F) -> !
+          where F : ::mem::FrameAllocator + 'static
+                                           {
     // init intr and build mode stacks
     // TODO: add check if done, and do if not  build_mode_stacks(& mut mapper, &mut frame_allocator);
 
@@ -75,11 +75,9 @@ pub fn arm_main<T: ::mem::FrameAllocator>(mut mapper: self::mem::PageTable,
 
     // undefined instruction to test
     //   unsafe{asm!(".word 0xffffffff" :: :: "volatile");}
-    let initplat = move |mm: &mut self::mem::PageTable,
-                         fa: &mut T,
-                         sched_intr: Rc<platform::InterruptSource>| {
+    let initplat = || {
 
-        let board_services = self::board::init_board(mm as &mut MemoryMapper, fa, sched_intr);
+        let board_services = self::board::init_board();
 
         // init board
         PlatformServices { board_services: board_services }

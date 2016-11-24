@@ -26,9 +26,11 @@ pub mod device;
 pub mod arch;
 pub mod mem;
 pub mod sched;
+pub mod sync;
 pub mod platform;
 
 
+use collections::boxed::Box;
 use alloc::rc::Rc;
 use alloc::arc::Arc;
 
@@ -45,34 +47,51 @@ fn init_heap(mapper: &mut ::mem::MemoryMapper, frame_allocator: &mut ::mem::Fram
 }
 
 pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: I)
-    where M: mem::MemoryMapper,
-          F: mem::FrameAllocator,
-          I: Fn(&mut M, &mut F, Rc<platform::InterruptSource>) -> platform::ArchPlatformServices
+    where M: mem::MemoryMapper + 'static,
+          F: mem::FrameAllocator + 'static,
+          I: Fn() -> platform::ArchPlatformServices
 {
     init_heap(&mut mapper, &mut frame_allocator);
 
+    // we can box stuff!
     // init scheduler
-    let sched = Rc::new(sched::Sched::new());
-    let arch_platform_services = init_platform(&mut mapper, &mut frame_allocator, sched.clone());
+    let farc = Rc::new(frame_allocator);
+    let p_s = platform::PlatformServices {
+            scheduler: sched::Sched::new(),
+            mem_manager: Box::new(
+                self::mem::DefaultMemoryManagaer::new(
+                    Box::new(mapper),
+                    farc.clone()
+                )
+            ), 
+            frame_alloc: farc.clone(),
+            arch_services: None,
+        };
+    unsafe{
+        platform::set_platform_services(p_s);
+    }
 
-    platform::set_platform_services(platform::PlatformServices {
-        scheduler: sched,
-        arch_services: arch_platform_services,
-    });
+    // TODO add the sched interrupt back, to be explicit
+    let arch_plat_services = init_platform();
+
+    unsafe{
+        platform::get_mut_platform_services().arch_services = Some(arch_plat_services);
+    }
     // scheduler is ready ! we can use sync objects!
 
     // enable interrupts!
     platform::set_interrupts(true);
 
     // sema
-    let sema = Arc::new(sched::sema::Semaphore::new(1));
+    let sema = Arc::new(sync::Semaphore::new(1));
 
     // init our thread:
     {
         let sema = sema.clone();
         let stack2: ::mem::VirtualAddress = ::mem::VirtualAddress(0xDD00_0000);
-        let pa = frame_allocator.allocate(1).unwrap();
-        mapper.map(&mut frame_allocator,
+        let pa = farc.allocate(1).unwrap();
+
+        platform::get_mut_platform_services().mem_manager.map(
                  pa,
                  stack2,
                  mem::MemorySize::PageSizes(1))
@@ -93,8 +112,9 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
     {
         let sema = sema.clone();
         let stack2: ::mem::VirtualAddress = ::mem::VirtualAddress(0xDE00_0000);
-        let pa = frame_allocator.allocate(1).unwrap();
-        mapper.map(&mut frame_allocator,
+        let pa = farc.allocate(1).unwrap();
+
+        platform::get_mut_platform_services().mem_manager.map(
                  pa,
                  stack2,
                  mem::MemorySize::PageSizes(1))

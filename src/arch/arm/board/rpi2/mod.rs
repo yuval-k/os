@@ -2,15 +2,20 @@ pub mod mailbox;
 pub mod serial;
 pub mod stub;
 
+use core;
 use core::ops;
 use core::sync::atomic;
+use core::intrinsics::{volatile_load, volatile_store};
+
 use super::super::mem;
 use super::super::vector;
+use rlibc;
 
 use collections::boxed::Box;
 use alloc::rc::Rc;
 
 use mem::MemoryMapper;
+use mem::PVMapper;
 use platform;
 
 use device::serial::SerialMMIO;
@@ -51,6 +56,43 @@ extern "C" {
     static _kernel_end_virt : *const ();
     static stub_l1pagetable : *const ();
     static stub_l2pagetable : *const ();
+    static __bss_start : *const ();
+    static __bss_end : *const ();
+    
+}
+
+const GPIO_BASE : ::mem::VirtualAddress = ::mem::VirtualAddress(MMIO_VSTART.0 + 0x200000);
+
+// thanks http://sysprogs.com/VisualKernel/tutorials/raspberry/jtagsetup/
+fn set_gpio_alt(gpio : u32, func : u32 ) {
+    let register_index : usize = gpio as usize / 10;
+    let bit = (gpio % 10) * 3;
+
+    let ptr = (GPIO_BASE.0 + core::mem::size_of::<u32>()*register_index) as *mut u32;
+
+    let old_value = unsafe{volatile_load(ptr)};
+    let mask : u32 = 0b111 << bit;
+    unsafe{volatile_store(ptr, (old_value & (!mask)) | ((func << bit) & mask))};
+}
+
+fn debug_release() -> bool {
+    // deubgger attached will change this to true..
+    return false;
+}
+
+fn enable_debugger() {
+    const GPIO_ALT_FUNCTION_4 :u32 = 0b011;
+    const GPIO_ALT_FUNCTION_5 :u32 = 0b010;
+    set_gpio_alt(22, GPIO_ALT_FUNCTION_4);
+	set_gpio_alt(4,  GPIO_ALT_FUNCTION_5);
+	set_gpio_alt(27, GPIO_ALT_FUNCTION_4);
+	set_gpio_alt(25, GPIO_ALT_FUNCTION_4);
+	set_gpio_alt(23, GPIO_ALT_FUNCTION_4);
+	set_gpio_alt(24, GPIO_ALT_FUNCTION_4);
+    write_to_console("Debugger enabled!");
+    
+    while !debug_release() {
+    }
 }
 
 #[no_mangle]
@@ -63,12 +105,19 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
                                   l2table_space_id: usize)
                                   -> ! {
 
+    // first thing - zero out the bss
+    let bss_start = &__bss_start as *const*const () as *mut u8;
+    let bss_end = &__bss_end as *const*const () as *mut u8;
+
+    unsafe { rlibc::memset(bss_start, 0, (bss_end as usize) - (bss_start as usize))};
+
     let ml = mem::MemLayout {
         kernel_start_phy: ::mem::PhysicalAddress(kernel_start_phy),
         kernel_start_virt: ::mem::VirtualAddress(kernel_start_virt),
         kernel_end_virt: ::mem::VirtualAddress(kernel_end_virt),
-        stack_phy: ::mem::PhysicalAddress(sp_end_phy - mem::PAGE_SIZE), /* sp points to begining of stack.. */
-        stack_virt: ::mem::VirtualAddress(sp_end_virt - mem::PAGE_SIZE),
+        // TODO: make stack size a constant and not hard coded
+        stack_phy: ::mem::PhysicalAddress(sp_end_phy - 2*mem::PAGE_SIZE), /* sp points to begining of stack.. */
+        stack_virt: ::mem::VirtualAddress(sp_end_virt - 2*mem::PAGE_SIZE),
     };
 
     let kernel_size = kernel_end_virt - kernel_start_virt;
@@ -81,13 +130,12 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
                        down(ml.stack_phy.0)..up(sp_end_phy),
                        down(s_begin)..up(s_end)];
     // can't use short syntax: https://github.com/rust-lang/rust/pull/21846#issuecomment-110526401
-    let mut freed_ranges: [Option<ops::Range<::mem::PhysicalAddress>>; 10] =
-        [None, None, None, None, None, None, None, None, None, None];
 
     let mut frame_allocator =
-        mem::LameFrameAllocator::new(&skip_ranges, &mut freed_ranges, 1 << 27);
+        mem::LameFrameAllocator::new(&skip_ranges, 1 << 27);
 
 
+    // TODO support sending IPIs to other CPUs when page mapping changes so they can flush tlbs.
     let mut page_table = mem::init_page_table(::mem::VirtualAddress(l1table_id),
                                               ::mem::VirtualAddress(l2table_space_id),
                                               &ml,
@@ -105,9 +153,10 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
                     MMIO_VSTART,
                     MMIO_PEND - MMIO_PSTART)
         .unwrap();
-        // TODO support sending IPIs to other CPUs when page mapping changes so they can flush tlbs.
-
     unsafe { serial_base = page_table.p2v(serial::SERIAL_BASE_PADDR).unwrap() }
+
+    // gpio mapped, we can enable JTAG pins!
+  //  enable_debugger();
 
     write_to_console("Welcome home!");
 
@@ -130,10 +179,8 @@ extern {
 }
 
 // This function should be called when we have a heap and a scheduler.
-pub fn init_board(mapper: &mut ::mem::MemoryMapper,
-                  fa: &mut ::mem::FrameAllocator,
-                       sched_intr: Rc<platform::InterruptSource>)
-                       -> PlatformServices {
+// TODO make sure we have a scheduler..
+pub fn init_board() -> PlatformServices {
     // TODO: init mailbox
 
     // TODO: check how many other CPUs we have,
@@ -154,35 +201,35 @@ pub fn init_board(mapper: &mut ::mem::MemoryMapper,
     //    do memory barrier()
     //    wake other CPU(i)
     //    wait for CPU
-    use core::intrinsics::{volatile_load, volatile_store};
 
-    let base = mapper.p2v(ARM_LOCAL_PSTART).unwrap();
+    let mem_manager = &::platform::get_platform_services().mem_manager;
+    let fa = &::platform::get_platform_services().frame_alloc;
+
+    let base = mem_manager.p2v(ARM_LOCAL_PSTART).unwrap();
+        
+    let mailboxes = mailbox::LocalMailbox::new();
 
     for i in 1 .. NUM_CPUS {
-        
         // TODO: allocate stack instead of making up random values..
         
         let pa = fa.allocate(1).unwrap();
         // TODO - de uglyfy
         let stk = ::mem::VirtualAddress(0x100_0000 + 0x1000*i);
-        mapper.map(fa, pa, stk, ::mem::MemorySize::PageSizes(1)).unwrap();
+        mem_manager.map(pa, stk, ::mem::MemorySize::PageSizes(1)).unwrap();
 
-        unsafe{current_stack = stk.0  };
+        unsafe{current_stack = stk.0  + ::platform::PAGE_SIZE};
         ::arch::arm::cpu::memory_write_barrier();
 
         // wake up CPU
         // TODO: WAKE UP CPU
         // write start address to CPU N mailbox 3
-        let write_offset = 0x8c + (0x10 * i);
-        let write_ptr: *mut u32 = (base.0 + write_offset) as *mut u32;
-        unsafe{ volatile_store(write_ptr, _secondary_start as *const u32 as u32)};
+        mailboxes.mailboxes[i].set_high(3, _secondary_start as *const u32 as u32);
 
-        let read_offset = 0xcc + (0x10 * i);
-        let read_ptr: *mut u32 = (base.0 + read_offset) as *mut u32;
         // wait for cpu to start
         loop {
             // other cpu hatched and cleared his mailbox
-            let cpunmbox3 = unsafe{ volatile_load(read_ptr)};
+            // what the other cpu does, is "documented" in qemu's write_smpboot: https://github.com/qemu/qemu/blob/4771d756f46219762477aaeaaef9bd215e3d5c60/hw/arm/raspi.c#L35)
+            let cpunmbox3 = mailboxes.mailboxes[i].read(3);
             if cpunmbox3 == 0 {
                 break;
             }
