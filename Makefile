@@ -2,17 +2,24 @@ LIB_COMPILER=$(shell find  ~/.multirust -name $(TARGET))/lib/libcompiler_builtin
 CROSS_TOOL_TARGET ?= arm-none-eabi
 ARCH=arm
 
+# BOARD=rpi2
+BOARD=integrator
+
+ifeq ($(BOARD),rpi2)
 TARGET ?= armv7-unknown-linux-gnueabihf
-BOARD=rpi2
 MACHINE=raspi2
 QEMU=docker run -t -i --net host --rm -v $(shell pwd):$(shell pwd):ro --workdir $(shell pwd) qemu-rpi qemu-system-arm
 RUSTCFLAGS=
+endif
 
-# TARGET ?= arm-unknown-linux-gnueabi
-# BOARD=integrator
-# MACHINE=integratorcp -cpu arm1176
-# QEMU=qemu-system-arm -m 128
-# RUSTCFLAGS=-Ctarget-cpu=arm1176jz-s
+ifeq ($(BOARD),integrator)
+TARGET ?= arm-unknown-linux-gnueabi
+MACHINE=integratorcp -cpu arm1176
+QEMU=qemu-system-arm -m 128
+RUSTCFLAGS=-Ctarget-cpu=arm1176jz-s
+endif
+
+
 linker_script=src/arch/$(ARCH)/board/$(BOARD)/linker.ld
 stub=src/arch/$(ARCH)/board/$(BOARD)/stub.S 
 stub_object=target/$(TARGET)/stub.o
@@ -50,7 +57,7 @@ $(stub_object): $(stub)
 $(glue_object): $(glue)
 	$(CC) -Wall -Wextra -Werror -nostdlib -nostartfiles -ffreestanding -std=gnu99 -c $(glue) -o $(glue_object)
 
-target/kernel.img: $(os_lib) $(linker_script) $(stub_object) 
+target/kernel.img: $(os_lib) $(linker_script) $(stub_object) $(glue_object)
 	$(LD) -n --gc-sections -T $(linker_script) -o target/kernel.img \
 		$(stub_object) $(glue_object)  target/$(TARGET)/debug/libos.a $(LIB_COMPILER)
 

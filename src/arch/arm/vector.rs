@@ -178,26 +178,26 @@ impl VectorTable {
     }
 }
 
-fn vector_reset_handler(_: &InterruptContext) {
+fn vector_reset_handler(_: &mut InterruptContext) {
 
     // TODO : call scheduler
     loop {}
 
 }
 
-fn vector_undefined_handler(_: &InterruptContext) {
+fn vector_undefined_handler(_: &mut InterruptContext) {
     loop {}
 }
 
-fn vector_softint_handler(_: &InterruptContext) {
+fn vector_softint_handler(_: &mut InterruptContext) {
     loop {}
 }
 
-fn vector_prefetch_abort_handler(_: &InterruptContext) {
+fn vector_prefetch_abort_handler(_: &mut InterruptContext) {
     loop {}
 }
 
-fn vector_data_abort_handler(ctx: &InterruptContext) {
+fn vector_data_abort_handler(ctx: &mut InterruptContext) {
     use collections::String;
     use core::fmt::Write;
 
@@ -209,7 +209,7 @@ fn vector_data_abort_handler(ctx: &InterruptContext) {
     loop {}
 }
 
-fn vector_irq_handler(ctx: &InterruptContext) {
+fn vector_irq_handler(ctx: &mut InterruptContext) {
     unsafe {
         if let Some(ref mut func) = vecTable.irq_callback {
             func.interrupted(ctx);
@@ -217,6 +217,6 @@ fn vector_irq_handler(ctx: &InterruptContext) {
     }
 }
 
-fn vector_fiq_handler(_: &InterruptContext) {
+fn vector_fiq_handler(_: &mut InterruptContext) {
     loop {}
 }

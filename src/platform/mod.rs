@@ -18,7 +18,7 @@ pub struct ThreadId(pub usize);
 
 pub trait InterruptSource {
     // must be safe for concurrent calls.
-    fn interrupted(&self, &Context);
+    fn interrupted(&self, &mut Context);
 }
 
 

@@ -129,7 +129,6 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
     let skip_ranges = [down(kernel_start_phy)..up(kernel_start_phy + kernel_size),
                        down(ml.stack_phy.0)..up(sp_end_phy),
                        down(s_begin)..up(s_end)];
-    // can't use short syntax: https://github.com/rust-lang/rust/pull/21846#issuecomment-110526401
 
     let mut frame_allocator =
         mem::LameFrameAllocator::new(&skip_ranges, 1 << 27);

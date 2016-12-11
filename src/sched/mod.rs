@@ -326,7 +326,7 @@ fn handle_interrupts() {
 // for the timer interrupt..
 impl platform::InterruptSource for Sched {
     // this method is called platform::ticks_in_second times a second
-    fn interrupted(&self, ctx: &platform::Context) {
+    fn interrupted(&self, ctx: &mut platform::Context) {
         const DELTA_MILLIS: u64= (1000 / platform::ticks_in_second) as u64;
         {
             let mut simpl = self.sched_impl.borrow_mut();

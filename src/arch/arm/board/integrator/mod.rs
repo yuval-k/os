@@ -11,6 +11,7 @@ use collections::boxed::Box;
 use alloc::rc::Rc;
 
 use mem::MemoryMapper;
+use mem::PVMapper;
 use platform;
 
 use device::serial::SerialMMIO;
@@ -53,12 +54,9 @@ pub extern "C" fn integrator_main(sp_end_virt: usize,
     let skip_ranges = [down(kernel_start_phy)..up(kernel_start_phy + kernel_size),
                        down(ml.stack_phy.0)..up(sp_end_phy),
                        down(l1table_id)..up(l2table_space_id + 4 * mem::L2TABLE_ENTRIES)];
-    // can't use short syntax: https://github.com/rust-lang/rust/pull/21846#issuecomment-110526401
-    let mut freed_ranges: [Option<ops::Range<::mem::PhysicalAddress>>; 10] =
-        [None, None, None, None, None, None, None, None, None, None];
 
     let mut frame_allocator =
-        mem::LameFrameAllocator::new(&skip_ranges, &mut freed_ranges, 1 << 27);
+        mem::LameFrameAllocator::new(&skip_ranges, 1 << 27);
 
     let mut page_table = mem::init_page_table(::mem::VirtualAddress(l1table_id),
                                               ::mem::VirtualAddress(l2table_space_id),
@@ -92,13 +90,13 @@ pub struct PlatformServices {
 }
 
 // This function should be called when we have a heap and a scheduler.
-pub fn init_board(mapper: &mut ::mem::MemoryMapper,
-                  fa: &mut ::mem::FrameAllocator,
-                       sched_intr: Rc<platform::InterruptSource>)
-                       -> PlatformServices {
+pub fn init_board() -> PlatformServices {
+
+    let mapper = &::platform::get_platform_services().mem_manager;
 
     let mut pic_ = Box::new(pic::PIC::new(mapper.p2v(pic::PIC_BASE_PADDR).unwrap()));
 
+/*
     // start a timer
     let mut tmr =
         Box::new(timer::Timer::new(1, mapper.p2v(timer::TIMERS_BASE).unwrap(), sched_intr));
@@ -109,6 +107,7 @@ pub fn init_board(mapper: &mut ::mem::MemoryMapper,
 
 
     pic_.add_timer_callback(tmr);
+    */
     pic_.enable_interrupts(pic::TIMERINT1);
 
     // TODO not move the pic to the vector table.
