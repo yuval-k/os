@@ -179,7 +179,8 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
 extern "C" fn eh_personality() {}
 
 #[lang = "panic_fmt"]
-extern "C" fn panic_fmt(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
+#[no_mangle]
+extern "C" fn rust_begin_unwind(fmt: core::fmt::Arguments, file: &str, line: u32) -> ! {
     use collections::String;
     use core::fmt::Write;
 

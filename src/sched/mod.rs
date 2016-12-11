@@ -6,9 +6,10 @@ use super::platform;
 use alloc::boxed::FnBox;
 
 use platform::ThreadId;
+use sync;
 
 
-type C = super::platform::Context;
+type C = super::platform::ThreadContext;
 
 
 const WAKE_NEVER: u64 = 0xFFFFFFFF_FFFFFFFF;
@@ -28,12 +29,14 @@ struct Thread {
 // TODO: make this Thread and SMP safe.
 // TODO this is the one mega unsafe class, so it needs to take care of it's on safety.
 pub struct Sched {
-    sched_impl : RefCell<SchedImpl>
+    sched_impl : RefCell<SchedImpl>,
+    cpu_mutex : sync::CpuMutex<()>
 }
 
 struct SchedImpl {
     threads: Vec<Box<Thread>>,
     idle_thread: Thread,
+    
     curr_thread_index: Option<usize>,
     thread_id_counter: usize,
     time_since_boot_millies: u64,
@@ -53,6 +56,7 @@ extern "C" fn thread_start(start: *mut Box<FnBox()>) {
 impl Sched {
     pub fn new() -> Sched {
         Sched {
+        cpu_mutex : sync::CpuMutex::new(()), 
         sched_impl : RefCell::new(SchedImpl {
             // fake thread as this main thread..
             threads: vec![Box::new(
@@ -102,6 +106,7 @@ impl Sched {
         });
 
         let ig = platform::intr::no_interrupts();
+        let guard = self.cpu_mutex.lock();
         simpl.threads.push(t);
         // find an eligble thread
         // threads.map()
@@ -110,6 +115,9 @@ impl Sched {
     // no interrupts here..
     pub fn schedule_no_intr(&self, old_ctx: &C) -> C {
         {
+            // TODO: cpu mutex when choosing new thread, and changing it's state to running,
+            // and changing the old thread to available
+            // after state is saved we can release cpu mutex
             let mut simpl = self.sched_impl.borrow_mut();
             if let Some(cur_th_i) = simpl.curr_thread_index {
                 simpl.threads[cur_th_i].ctx = *old_ctx;
@@ -162,7 +170,8 @@ impl Sched {
     pub fn exit_thread(&self) {
         // disable interrupts
         let ig = platform::intr::no_interrupts();
-     
+        let guard = self.cpu_mutex.lock();
+
         {
             let mut simpl = self.sched_impl.borrow_mut();
             // remove the current thread
@@ -172,6 +181,7 @@ impl Sched {
         let new_context = self.schedule_new();
         // tmp ctx.. we don't really gonna use it...
         let mut c = platform::new_thread(::mem::VirtualAddress(0), ::mem::VirtualAddress(0), 0);
+        // TODO: is this smp safe? probably yes..
         platform::switch_context(&mut c, &new_context);
 
         // TODO - stack leaks here.. should we scheduler the schulder thread to clean it up.?
@@ -181,6 +191,7 @@ impl Sched {
     pub fn yield_thread(&self) {
         // disable interrupts
         let ig = platform::intr::no_interrupts();
+        let guard = self.cpu_mutex.lock();
         self.yeild_thread_no_intr()
 
     }
@@ -207,29 +218,50 @@ impl Sched {
             };
             // context includes whether or not interrupts are enabled.
             //TODO: perhaps forbid contex switch with interrupts disabled?
+            // TODO: to make switch contexct cpu safe, before we release cpu lock, we need:
+            // - save the context of the current thread
+            // - set the next thread as running
+            // - current thread state should have already been changed... so no need to touch that
+            // release the cpu lock, after the current context was saved and before the next thread starts running
+            
             platform::switch_context(ctx, &new_context);
             // we don't get here :)
+        }
+    }
+
+    pub fn unschedule_no_intr(&self) {
+        let mut simpl = self.sched_impl.borrow_mut();
+        let cur_th = simpl.curr_thread_index.unwrap();
+
+        let ref mut t = simpl.threads[cur_th];
+        t.ready = false;
+        if t.wake_on == 0 {
+            t.wake_on = WAKE_NEVER;
         }
     }
 
     pub fn block(&self) {
         // disable interrupts
         let ig = platform::intr::no_interrupts();
+        let guard = self.cpu_mutex.lock();
         self.block_no_intr()
     }
 
     pub fn sleep(&self, millis: u32) {
         // disable interrupts
+        //TODO how to release cpu guard after the context was saved?!
         let ig = platform::intr::no_interrupts();
         {
+            let guard = self.cpu_mutex.lock();
+
             let mut simpl = self.sched_impl.borrow_mut();
             let time_since_boot_millies = simpl.time_since_boot_millies;
             let cur_th = simpl.curr_thread_index.unwrap();
             let ref mut cur_thread = simpl.threads[cur_th];
             cur_thread.wake_on = time_since_boot_millies + (millis as u64);
+            cur_thread.ready = false;
         }
-
-        self.block_no_intr()
+        self.yeild_thread_no_intr()
     }
 
     // assume interrupts are blocked
@@ -245,6 +277,12 @@ impl Sched {
             }
         }
         self.yeild_thread_no_intr();
+    }
+
+    pub fn wakeup(&self, tid: ThreadId) {
+        // disable interrupts
+        let ig = platform::intr::no_interrupts();
+        self.wakeup_no_intr(tid)
     }
 
     // assume interrupts are blocked
@@ -269,17 +307,38 @@ impl Sched {
     pub fn lock(&mut self) {}
 
     pub fn unlock(&mut self) {}
+
 }
+
+// this function runs in the context of whatever thread was interrupted.
+fn handle_interrupts() {
+    let ig = platform::intr::no_interrupts();
+    
+    // copy context to stack;
+  //  let ctx = *get_cur_cpu().get_context();
+    // switch!
+   // yield();
+
+
+}
+
 
 // for the timer interrupt..
 impl platform::InterruptSource for Sched {
     // this method is called platform::ticks_in_second times a second
-    fn interrupted(&self, ctx: &mut platform::Context) {
+    fn interrupted(&self, ctx: &platform::Context) {
         const DELTA_MILLIS: u64= (1000 / platform::ticks_in_second) as u64;
         {
             let mut simpl = self.sched_impl.borrow_mut();
             simpl.time_since_boot_millies +=  DELTA_MILLIS;
         }
-        *ctx = self.schedule_no_intr(ctx);
+        // TODO: change to yeild? - we need yield to mark the unscheduled 
+        // thread as unscheduled.. so it can continue to run on other cpus.. 
+        // and release cpu mutex..
+        // TODO(YES!): switch to CPU SCHEDULER THREAD (per cpu) not in interrupt mode..
+        self.yeild_thread_no_intr();
+        // TODO: need to notify that context was switched
+        // set pc to handle_interrupts
+        // set r0 to lr
     }
 }

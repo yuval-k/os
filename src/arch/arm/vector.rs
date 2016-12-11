@@ -1,6 +1,5 @@
 use core::slice;
 use super::cpu;
-use super::thread::Context;
 use platform;
 
 use collections::boxed::Box;
@@ -11,8 +10,10 @@ pub const VECTORS_ADDR: ::mem::VirtualAddress = ::mem::VirtualAddress(0x0);
 
 // NOTE: DO NOT change struct without changing the inline assembly in vector_entry
 #[repr(C, packed)]
-#[derive(Copy, Clone)]
-struct InterruptContext {
+#[derive(Copy, Clone, Debug)]
+pub struct InterruptContext {
+    sp:   u32,
+    lr:   u32,
     cpsr: u32,
     r0: u32,
     r1: u32,
@@ -30,56 +31,40 @@ struct InterruptContext {
     pc: u32,
 }
 
+// can't use sizeof... https://github.com/rust-lang/rfcs/issues/1144
+const SIZE_OF_INT_CTX : usize = 4*(1+1+1+13+1);
+
 
 macro_rules! inthandler {
     ( $handler:ident ) => {{ 
 
-extern "C" fn vector_with_context(ctx : &mut InterruptContext) {
-    let (r13, r14) = cpu::get_r13r14(ctx.cpsr);
-    let mut c = Context {
-    r0: ctx.r0,
-    r1: ctx.r1,
-    r2: ctx.r2,
-    r3: ctx.r3,
-    r4: ctx.r4,
-    r5: ctx.r5,
-    r6: ctx.r6,
-    r7: ctx.r7,
-    r8: ctx.r8,
-    r9: ctx.r9,
-    r10: ctx.r10,
-    r11: ctx.r11,
-    r12: ctx.r12,
-    sp: r13,
-    lr: r14,
-    pc: ctx.pc,
-    cpsr: ctx.cpsr,
-    };
+extern "C" fn vector_with_context(ctx : &InterruptContext) {
+
+    // copy the interrupt context from interrupt stack to us 
+    // (we are on kernel stack)
+    let mut c : InterruptContext = *ctx;
     
     $handler(&mut c);
 
-    // potentially context switch - so restore registers incase handler changed them!!
-    cpu::set_r13r14(c.cpsr, c.sp, c.lr);
-    ctx.r0 = c.r0;
-    ctx.r1 = c.r1;
-    ctx.r2 = c.r2;
-    ctx.r3 = c.r3;
-    ctx.r4 = c.r4;
-    ctx.r5 = c.r5;
-    ctx.r6 = c.r6;
-    ctx.r7 = c.r7;
-    ctx.r8 = c.r8;
-    ctx.r9 = c.r9;
-    ctx.r10 = c.r10;
-    ctx.r11 = c.r11;
-    ctx.r12 = c.r12;
-    ctx.pc = c.pc;
-    ctx.cpsr = c.cpsr;
-
+    // restore everything..
+    unsafe{
+    asm!("mov r0, $0
+        /* r0 has InterruptContext */
+        ldr sp, [r0]!
+        ldr lr, [r0]!
+        /* load spsr */
+        ldmia r0!, {r1}
+        mrs r1, spsr
+        ldmia r0, {r0-r12, pc}^
+        "
+        :: "r"(&c)
+        :: "volatile")
+    
+    };    
 }
 
 #[naked]
-extern "C" fn vector_entry() {
+extern "C" fn vector_entry() -> !{
     // lr - 4 points to where we need to return
     // original lr and sp are saved on diff mode
     // save all the registers (http://simplemachines.it/doc/arm_inst.pdf)
@@ -89,30 +74,49 @@ extern "C" fn vector_entry() {
     // then we can save the context!
     // save spsr incase we are gonna need it.
     // r13,r14 are saved in the cpu when we switch modes else; r15 will be the current r14
+
     unsafe{
     asm!("sub lr,lr, #4
           push {lr}
           push {r0-r12}
-          mrs r0, spsr
-          push {r0}
+          mrs r1, spsr
+          push {r1}
+
+          /* prepare argument for next function */
           mov r0, sp
+          /* restore stack to the original location */
+          /* this is a bit weird as i am going to use the 'freed' stack soon..
+          but interrupts are disable so  hopefully will be ok
+          */
+          add sp, sp, $1
+          /* switch to the mode we came from, if it user mode, change to system mode */
+          /* mask the mode */
+          and r1, r1 , $2
+          /* check if user mode */
+          cmp r1, $4
+          /* if user mode, change to system mode */
+          orreq r1, $5
+          /* change back to original mode to grab sp and lr */
+          msr cpsr_c, r1
+
+          /* save original lr and sp */
+          str lr, [r0]!
+          str sp, [r0]!
+
+          mov r1, $3
+          msr cpsr_c, r1
+          /* move on */
           bl $0
-    ":: "i"(vector_with_context as extern "C" fn(_) ):  : "volatile");
+          /* should not get here */
+    ":: "i"(vector_with_context as extern "C" fn(_) ),
+        "i"(SIZE_OF_INT_CTX),
+        "i"(super::cpu::MODE_MASK),
+        "i"(super::cpu::SUPER_MODE),
+        "i"(super::cpu::USER_MODE),
+        "i"(super::cpu::SYS_MODE)
+        :: "volatile");
     }
-
-    // we may want to restore the original sp and lr later on if we do a context switch
-    // see: http://wiki.osdev.org/ARM_Integrator-CP_IRQTimerAndPICAndTaskSwitch
-    // http://wiki.osdev.org/ARM_Integrator-CP_IRQTimerPICTasksMMAndMods
-
-    // restore all registers with s bit on
-    // sp will be restored automatically when we exit and restore cpsr
-    unsafe{
-    asm!("pop {r0}
-          msr spsr, r0
-          pop {r0-r12}
-          ldmfd sp!, {pc}^
-    ": : : : "volatile")
-    };
+    loop{}
 }
 
 vector_entry
@@ -174,26 +178,26 @@ impl VectorTable {
     }
 }
 
-fn vector_reset_handler(_: &mut Context) {
+fn vector_reset_handler(_: &InterruptContext) {
 
     // TODO : call scheduler
     loop {}
 
 }
 
-fn vector_undefined_handler(_: &mut Context) {
+fn vector_undefined_handler(_: &InterruptContext) {
     loop {}
 }
 
-fn vector_softint_handler(_: &mut Context) {
+fn vector_softint_handler(_: &InterruptContext) {
     loop {}
 }
 
-fn vector_prefetch_abort_handler(_: &mut Context) {
+fn vector_prefetch_abort_handler(_: &InterruptContext) {
     loop {}
 }
 
-fn vector_data_abort_handler(ctx: &mut Context) {
+fn vector_data_abort_handler(ctx: &InterruptContext) {
     use collections::String;
     use core::fmt::Write;
 
@@ -205,7 +209,7 @@ fn vector_data_abort_handler(ctx: &mut Context) {
     loop {}
 }
 
-fn vector_irq_handler(ctx: &mut Context) {
+fn vector_irq_handler(ctx: &InterruptContext) {
     unsafe {
         if let Some(ref mut func) = vecTable.irq_callback {
             func.interrupted(ctx);
@@ -213,6 +217,6 @@ fn vector_irq_handler(ctx: &mut Context) {
     }
 }
 
-fn vector_fiq_handler(_: &Context) -> Option<Context> {
+fn vector_fiq_handler(_: &InterruptContext) {
     loop {}
 }

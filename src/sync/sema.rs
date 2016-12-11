@@ -43,8 +43,10 @@ impl Semaphore {
             let locked = self.sema.lock();
             ret = locked.no_interrupts().acquire();
         }
+
         if ret {
-            platform::get_platform_services().get_scheduler().block();
+            platform::get_platform_services().get_scheduler().yield_thread();
+            // TODO: add time out feature and check if we timed out.
         }
 
     }
@@ -55,8 +57,11 @@ impl Semaphore {
         // if n is bigger than counter,
         // tell the scheduler that the current thread is waking
         // for (n-counter) units to arrive.
-        let locked = self.sema.lock();
-        locked.no_interrupts().release();
+        let maybeThread : Option<platform::ThreadId>;
+        {
+            let locked = self.sema.lock();
+            locked.no_interrupts().release();
+        }
     }
 
     pub fn access(&self) -> SemaphoreGuard {
@@ -86,6 +91,7 @@ impl SemaphoreImpl {
             return false;
         }
 
+        platform::get_platform_services().get_scheduler().unschedule_no_intr();
         let cur_th = platform::get_platform_services().get_scheduler().get_current_thread();
         self.waiting
             .borrow_mut()
@@ -105,7 +111,7 @@ impl SemaphoreImpl {
             self.counter.set(self.counter.get() + 1);
         } else {
             let thread = self.waiting.borrow_mut().pop_front().unwrap();
-            platform::get_platform_services().get_scheduler().wakeup_no_intr(thread); /* put thread on the ready queue */
+            platform::get_platform_services().get_scheduler().wakeup_no_intr(thread);
         }
     }
 }
