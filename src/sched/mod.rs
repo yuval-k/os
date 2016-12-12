@@ -68,6 +68,7 @@ impl Sched {
                 })
                 ],
             idle_thread: Thread{
+                // TODO: add stack for idle thread
                 ctx : platform::new_thread(::mem::VirtualAddress(0), 
                     ::mem::VirtualAddress(platform::wait_for_interrupts as usize), 0),
                 ready: true,

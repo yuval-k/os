@@ -8,6 +8,9 @@ use collections::boxed::Box;
 // pub const VECTORS_ADDR : ::mem::VirtualAddress  = ::mem::VirtualAddress(0xea00_0000);
 pub const VECTORS_ADDR: ::mem::VirtualAddress = ::mem::VirtualAddress(0x0);
 
+
+/* TODO: only use this macro for interrupts */
+/* and not for data abort for example */
 // NOTE: DO NOT change struct without changing the inline assembly in vector_entry
 #[repr(C, packed)]
 #[derive(Copy, Clone, Debug)]
@@ -95,13 +98,13 @@ extern "C" fn vector_entry() -> !{
           /* check if user mode */
           cmp r1, $4
           /* if user mode, change to system mode */
-          orreq r1, $5
+          moveq r1, $5
           /* change back to original mode to grab sp and lr */
           msr cpsr_c, r1
 
           /* save original lr and sp */
-          str lr, [r0]!
-          str sp, [r0]!
+          str lr, [r0, #-4]!
+          str sp, [r0, #-4]!
 
           mov r1, $3
           msr cpsr_c, r1

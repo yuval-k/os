@@ -45,8 +45,8 @@ pub extern "C" fn integrator_main(sp_end_virt: usize,
         kernel_start_phy: ::mem::PhysicalAddress(kernel_start_phy),
         kernel_start_virt: ::mem::VirtualAddress(kernel_start_virt),
         kernel_end_virt: ::mem::VirtualAddress(kernel_end_virt),
-        stack_phy: ::mem::PhysicalAddress(sp_end_phy - mem::PAGE_SIZE), /* sp points to begining of stack.. */
-        stack_virt: ::mem::VirtualAddress(sp_end_virt - mem::PAGE_SIZE),
+        stack_phy: ::mem::PhysicalAddress(sp_end_phy - 2*mem::PAGE_SIZE), /* sp points to begining of stack.. */
+        stack_virt: ::mem::VirtualAddress(sp_end_virt - 2*mem::PAGE_SIZE),
     };
 
     let kernel_size = kernel_end_virt - kernel_start_virt;

@@ -70,10 +70,19 @@ extern "C" fn new_thread_trampoline(arg: u32, f : u32) {
 
 // cspr in system mode with interrupts enabled and no flags.
 const NEW_CSPR: u32 = super::cpu::SUPER_MODE;
+
 pub fn new_thread(stack: ::mem::VirtualAddress,
                   start: ::mem::VirtualAddress,
                   arg: usize)
                   -> Context {
+
+    if start.0 == 0 {
+        // this is the current thread, so no need to init anything
+        return Context {
+           sp: 0,
+        };
+    }
+
     // fill in the stack so that context_switch will work..
     // basically need to construct stack, as if context switch as called
 
