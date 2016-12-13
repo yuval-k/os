@@ -46,7 +46,7 @@ pub extern "C" fn switch_context<'a,'b>(current_context: Option< &'a  ::thread::
             ldr sp, [r1, $2]
 
             /* restore old regisers */
-            pop {r0-r12,r14}
+            pop {r4-r12,r14}
 
             /* changing threads so time to clear exclusive loads */
             clrex
@@ -55,7 +55,7 @@ pub extern "C" fn switch_context<'a,'b>(current_context: Option< &'a  ::thread::
             
           ":: "r"(new_context), "r"(current_context_ref) ,
               "i"( SP_OFFSET )
-           :: "volatile")
+           :"sp","r0","r1","r2","r3" : "volatile")
     };
 
     return current_context;

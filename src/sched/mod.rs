@@ -82,7 +82,7 @@ impl Sched {
         // threads.map()
     }
 
-    fn schedule_new(&self) -> &thread::Thread {
+    fn schedule_new(&self)  {
         // find an eligble thread
         // threads.map()
         let mut simpl = self.sched_impl.borrow_mut();
@@ -92,7 +92,7 @@ impl Sched {
         let num_threads = simpl.threads.len();
         for _ in 0..num_threads {
             cur_th += 1;
-            // TODO linker with libgcc/compiler_rt so we can have division and mod
+
             if cur_th == num_threads {
                 cur_th = 0;
             }
@@ -110,15 +110,12 @@ impl Sched {
             let cur_thread_ready = simpl.threads[cur_th].ready;
             if cur_thread_ready {
                 simpl.curr_thread_index = Some(cur_th);
-                let thread_ref = simpl.threads[cur_th].as_ref();
-                return thread_ref;
             }
         }
         // no thread is ready.. time to sleep sleep...
         // return to the idle thread.
         // don't wait for interrupts here, as we might already be in an interrupt..
         simpl.curr_thread_index = None;
-        &simpl.idle_thread
     }
 
     pub fn exit_thread(&self) {
@@ -132,11 +129,16 @@ impl Sched {
             let cur_th = simpl.curr_thread_index.unwrap();
             simpl.threads.remove(cur_th);
         }
+
         let new_context = self.schedule_new();
         // tmp ctx.. we don't really gonna use it...
 
-        // TODO: is this smp safe? probably yes..
-        platform::switch_context(None, &new_context);
+        // borrow read only
+        // TODO: this is going to fail - need to end borrow before the context switch
+        let simpl = self.sched_impl.borrow();
+        let cur_thread_box = &simpl.threads[simpl.curr_thread_index.unwrap()];
+        
+        platform::switch_context(None, cur_thread_box.as_ref());
 
         // TODO - stack leaks here.. 
         // need to register the thread for clean up..
@@ -153,19 +155,27 @@ impl Sched {
 
     fn yeild_thread_no_intr(&self) {
 
-        let curr_thread = { self.sched_impl.borrow().curr_thread_index };
+        // this can't be the idle thread...
+        let curr_thread = { self.sched_impl.borrow().curr_thread_index.unwrap() };
 
         // TODO: should we add a mutex for smp?
 
-        let new_context = self.schedule_new();
+        self.schedule_new();
 
         let new_thread = { self.sched_impl.borrow().curr_thread_index };
 
 
-        if curr_thread != new_thread {
-            let t = self.sched_impl.borrow_mut().threads[curr_thread.unwrap()].as_ref();
-                        
-            let oldT = platform::switch_context(Some(t), &new_context);
+        if Some(curr_thread) != new_thread {
+            let simpl = self.sched_impl.borrow();
+            let cur_thread_box = &simpl.threads[curr_thread];
+
+            let new_thread_box : &::thread::Thread = if let Some(index) = new_thread {
+              &simpl.threads[index]
+            } else {
+                &simpl.idle_thread
+            };
+
+            let oldT = platform::switch_context(Some(cur_thread_box.as_ref()), new_thread_box);
             // we get here when context is switch back to us
             // TODO: SMP: mark that the old thread is no longer running on CPU
 

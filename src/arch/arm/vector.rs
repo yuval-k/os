@@ -53,8 +53,8 @@ extern "C" fn vector_with_context(ctx : &InterruptContext) {
     unsafe{
     asm!("mov r0, $0
         /* r0 has InterruptContext */
-        ldr sp, [r0]!
-        ldr lr, [r0]!
+        ldr sp, [r0, #4]!
+        ldr lr, [r0, #4]!
         /* load spsr */
         ldmia r0!, {r1}
         mrs r1, spsr
