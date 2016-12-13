@@ -18,50 +18,76 @@ pub struct Context {
 
 // switch context without an interrupt.
 // called from kernel yeilding functions in system mode.
-pub extern "C" fn switch_context(current_context: &mut Context, new_context: &Context)  {
-    // save the non-scratch registers, as caller shouldn't care about the
+// TODO change 
+pub extern "C" fn switch_context<'a,'b>(current_context: Option< &'a  ::thread::Thread>, new_context: &'b ::thread::Thread) -> Option<&'a ::thread::Thread>  {
+    // no need to save the non-scratch registers, as caller shouldn't care about the
     // scratch registers or cpsr
+    let current_context_ref : u32 = if let Some(t) = current_context {
+        t as *const ::thread::Thread as u32
+    } else {
+        0u32
+    };
+
     unsafe {
         asm!("
-          /* store all regs in the stack - cause we can! we store
-           scratch registers as well for new threads */
-          push {r0-r12,r14}
-          mov r1, $0
-          mov r0, $1
-          /* save to r0, restore from r1 */
-          /* old context saved! */
+            mov r0, $1
+            cmp r0, #0
+            beq 1f
+            mov r1, $0
+            /* store all regs in the stack - cause we can!  */
+            push {r4-r12,r14}
+            /* save to r0, restore from r1 */
+            /* old context saved! */
 
-          /* store sp */
-          str sp, [r0, $2]
-          /* load new sp */
-          ldr sp, [r1, $2]
+            /* store sp */
+            str sp, [r0, $2]
+            1:
+            /* load new sp */
+            ldr sp, [r1, $2]
 
-          /* restore old regisers */
-          pop {r0-r12,r14}
+            /* restore old regisers */
+            pop {r0-r12,r14}
 
-          /* changing threads so time to clear exclusive loads */
-          clrex
+            /* changing threads so time to clear exclusive loads */
+            clrex
 
-          /* return old context (that's already in r0) */
-          bx lr
-
-          ":: "r"(new_context), "r"(current_context) ,
+            /* TODO: add MemBar incase thread goes to other cpu */
+            
+          ":: "r"(new_context), "r"(current_context_ref) ,
               "i"( SP_OFFSET )
+           :: "volatile")
+    };
+
+    return current_context;
+}
+    /* enable interrupts for new thread, as cspr is at unknown state..*/
+#[no_mangle]
+extern "C" fn new_thread_trampoline2(arg: u32, f : u32) {
+
+    // TODO: make sure that f is a extern "C" function 
+    // and then delete assembly..
+    super::cpu::enable_interrupts();
+
+        unsafe {
+        asm!("
+          mov r0, $0
+          bx $1
+          ":: "r"(arg), "r"(f) 
         :  : "volatile")
     };
 
 }
 
+// gets stack arg from non scratch regs
 #[naked]
-extern "C" fn new_thread_trampoline(arg: u32, f : u32) {
-    /* enable interrupts for new thread, as cspr is at unknown state..*/
-    super::cpu::enable_interrupts();
+extern "C" fn new_thread_trampoline1() {
 
     unsafe {
         asm!("
-          mov r0, $0
-          bx $1
-          ":: "r"(arg), "r"(f) 
+          mov r0, r4
+          mov r1, r5
+          b new_thread_trampoline2
+          "::
         :  : "volatile")
     };
 
@@ -88,7 +114,7 @@ pub fn new_thread(stack: ::mem::VirtualAddress,
 
     // store r14
     let mut stack = stack.offset(-4);
-    unsafe { volatile_store(stack.0 as *mut u32, new_thread_trampoline as u32); }
+    unsafe { volatile_store(stack.0 as *mut u32, new_thread_trampoline1 as u32); }
     // store r12
     stack = stack.offset(-4);
     unsafe { volatile_store(stack.0 as *mut u32, 0); }
@@ -112,10 +138,10 @@ pub fn new_thread(stack: ::mem::VirtualAddress,
     unsafe { volatile_store(stack.0 as *mut u32, 0); }
     // store r5
     stack = stack.offset(-4);
-    unsafe { volatile_store(stack.0 as *mut u32, 0); }
+    unsafe { volatile_store(stack.0 as *mut u32, start.0 as u32); }
     // store r4
     stack = stack.offset(-4);
-    unsafe { volatile_store(stack.0 as *mut u32, 0); }
+    unsafe { volatile_store(stack.0 as *mut u32, arg as u32); }
     // store r3
     stack = stack.offset(-4);
     unsafe { volatile_store(stack.0 as *mut u32, 0); }
@@ -124,10 +150,10 @@ pub fn new_thread(stack: ::mem::VirtualAddress,
     unsafe { volatile_store(stack.0 as *mut u32, 0); }
     // store r1
     stack = stack.offset(-4);
-    unsafe { volatile_store(stack.0 as *mut u32, start.0 as u32); }
+    unsafe { volatile_store(stack.0 as *mut u32, 0); }
     // store r0
     stack = stack.offset(-4);
-    unsafe { volatile_store(stack.0 as *mut u32, arg as u32); }
+    unsafe { volatile_store(stack.0 as *mut u32, 0); }
 
     Context {
         sp: stack.0 as u32,

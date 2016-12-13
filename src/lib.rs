@@ -27,6 +27,7 @@ pub mod arch;
 pub mod mem;
 pub mod sched;
 pub mod sync;
+pub mod thread;
 pub mod platform;
 
 
@@ -88,17 +89,10 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
     // init our thread:
     {
         let sema = sema.clone();
-        let stack2: ::mem::VirtualAddress = ::mem::VirtualAddress(0xDD00_0000);
-        let pa = farc.allocate(1).unwrap();
 
-        platform::get_mut_platform_services().mem_manager.map(
-                 pa,
-                 stack2,
-                 mem::MemorySize::PageSizes(1))
-            .unwrap();
         platform::get_platform_services()
             .get_scheduler()
-            .spawn(stack2.uoffset(platform::PAGE_SIZE), move || {
+            .spawn(move || {
                 loop {
                     sema.acquire();
                     platform::get_platform_services().get_scheduler().sleep(1000);
@@ -111,17 +105,10 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
     // init our thread:
     {
         let sema = sema.clone();
-        let stack2: ::mem::VirtualAddress = ::mem::VirtualAddress(0xDE00_0000);
-        let pa = farc.allocate(1).unwrap();
-
-        platform::get_mut_platform_services().mem_manager.map(
-                 pa,
-                 stack2,
-                 mem::MemorySize::PageSizes(1))
-            .unwrap();
+        
         platform::get_platform_services()
             .get_scheduler()
-            .spawn(stack2.uoffset(platform::PAGE_SIZE), move || {
+            .spawn(move || {
                 loop{
                     platform::write_to_console("t2 acquire semaphore");
                     sema.acquire();
