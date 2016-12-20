@@ -1,4 +1,3 @@
-LIB_COMPILER=$(shell find  ~/.multirust -name $(TARGET))/lib/libcompiler_builtins*.rlib
 CROSS_TOOL_TARGET ?= arm-none-eabi
 ARCH=arm
 
@@ -27,6 +26,8 @@ os_lib=target/$(TARGET)/debug/libos.a
 
 glue=src/arch/$(ARCH)/board/$(BOARD)/glue.c
 glue_object=target/$(TARGET)/glue.o
+
+LIB_COMPILER=$(shell find  ~/.multirust/ -name $(TARGET))/lib/libcompiler_builtins*.rlib
 
 
 AS=$(TARGET)-as
