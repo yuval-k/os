@@ -31,9 +31,9 @@ pub extern "C" fn switch_context<'a,'b>(current_context: Option< &'a  ::thread::
     unsafe {
         asm!("
             mov r0, $1
+            mov r1, $0
             cmp r0, #0
             beq 1f
-            mov r1, $0
             /* store all regs in the stack - cause we can!  */
             push {r4-r12,r14}
             /* save to r0, restore from r1 */
@@ -55,7 +55,7 @@ pub extern "C" fn switch_context<'a,'b>(current_context: Option< &'a  ::thread::
             
           ":: "r"(new_context), "r"(current_context_ref) ,
               "i"( SP_OFFSET )
-           :"sp","r0","r1","r2","r3" : "volatile")
+           :"sp","r0","r1","r4","r5","r6","r7","r8","r9","r10","r11","r12","r14" : "volatile")
     };
 
     return current_context;

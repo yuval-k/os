@@ -21,8 +21,7 @@ pub struct Sched {
 
 struct SchedImpl {
     threads: Vec<Box<thread::Thread>>,
-    idle_thread: thread::Thread,
-    
+    idle_threads: Vec<Box<thread::Thread>>,
     curr_thread_index: Option<usize>,
     thread_id_counter: usize,
     time_since_boot_millies: u64,
@@ -49,12 +48,17 @@ impl Sched {
                 thread::Thread::new_cur_thread(MAIN_THREAD_ID)
                 )
                 ],
-            idle_thread: thread::Thread::new(IDLE_THREAD_ID, ::mem::VirtualAddress(platform::wait_for_interrupts as usize), 0),
+            idle_threads: Vec::new(),
             curr_thread_index : Some(0),
             thread_id_counter : 10,
             time_since_boot_millies : 0,
         })
         }
+    }
+
+    pub fn add_idle_thread_for_cpu(&mut self) {
+        let idle = Box::new(thread::Thread::new(IDLE_THREAD_ID, ::mem::VirtualAddress(platform::wait_for_interrupts as usize), 0));
+        self.sched_impl.borrow_mut().idle_threads.push(idle);
     }
 
     pub fn spawn<F>(&self, f: F)
@@ -114,7 +118,6 @@ impl Sched {
         }
         // no thread is ready.. time to sleep sleep...
         // return to the idle thread.
-        // don't wait for interrupts here, as we might already be in an interrupt..
         simpl.curr_thread_index = None;
     }
 
@@ -172,7 +175,8 @@ impl Sched {
             let new_thread_box : &::thread::Thread = if let Some(index) = new_thread {
               &simpl.threads[index]
             } else {
-                &simpl.idle_thread
+                // TODO: SMP: get cpu id and return proper thread
+                &simpl.idle_threads[0]
             };
 
             let oldT = platform::switch_context(Some(cur_thread_box.as_ref()), new_thread_box);

@@ -72,6 +72,8 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
         platform::set_platform_services(p_s);
     }
 
+    platform::get_mut_platform_services().scheduler.add_idle_thread_for_cpu();
+
     // TODO add the sched interrupt back, to be explicit
     let arch_plat_services = init_platform();
 
