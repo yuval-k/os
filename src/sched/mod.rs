@@ -1,9 +1,9 @@
 use collections::Vec;
 use collections::boxed::Box;
+use alloc::boxed::FnBox;
 use core::cell::RefCell;
 use core::cell::Cell;
 use super::platform;
-use alloc::boxed::FnBox;
 use super::thread;
 
 use platform::ThreadId;
@@ -30,13 +30,6 @@ struct SchedImpl {
 const IDLE_THREAD_ID: ThreadId = ThreadId(0);
 const MAIN_THREAD_ID: ThreadId = ThreadId(1);
 
-extern "C" fn thread_start(start: *mut Box<FnBox()>) {
-    unsafe {
-        let f: Box<Box<FnBox()>> = Box::from_raw(start);
-        f();
-        platform::get_platform_services().get_scheduler().exit_thread();
-    }
-}
 
 impl Sched {
     pub fn new() -> Sched {
@@ -57,27 +50,34 @@ impl Sched {
     }
 
     pub fn add_idle_thread_for_cpu(&mut self) {
-        let idle = Box::new(thread::Thread::new(IDLE_THREAD_ID, ::mem::VirtualAddress(platform::wait_for_interrupts as usize), 0));
+        let idle = Self::new_thread_obj(IDLE_THREAD_ID, platform::wait_for_interrupts );
         self.sched_impl.borrow_mut().idle_threads.push(idle);
+    }
+
+    pub fn thread_start(current_context: Option< &::thread::Thread>, new_context: &::thread::Thread, start: Box<Box<FnBox()>>) {
+        unsafe {
+            start();
+            platform::get_platform_services().get_scheduler().exit_thread();
+        }
+    }
+
+    fn new_thread_obj<F>(tid: ThreadId, f: F) -> Box<thread::Thread>
+        where F: FnOnce(),
+              F: Send + 'static {
+        let p: Box<FnBox()> = Box::new(f);
+        let ptr = Box::into_raw(Box::new(p)) as *const usize as usize; // some reson without another box ptr is 1
+
+        Box::new(thread::Thread::new(tid, ptr))
     }
 
     pub fn spawn<F>(&self, f: F)
         where F: FnOnce(),
-              F: Send + 'static
-    {
-        let p: Box<FnBox()> = Box::new(f);
-        let ptr = Box::into_raw(Box::new(p)) as *const usize as usize; // some reson without another box ptr is 1
-        self.spawn_thread(::mem::VirtualAddress(thread_start as usize), ptr);
-    }
-
-    pub fn spawn_thread(&self,
-                        start: ::mem::VirtualAddress,
-                        arg: usize) {
+              F: Send + 'static {
         // TODO thread safety and SMP Support
         let mut simpl = self.sched_impl.borrow_mut();
         simpl.thread_id_counter +=1;
 
-        let t = Box::new(thread::Thread::new(ThreadId(simpl.thread_id_counter), start, arg));
+        let t = Self::new_thread_obj(ThreadId(simpl.thread_id_counter), f);
 
         let ig = platform::intr::no_interrupts();
         let guard = self.cpu_mutex.lock();

@@ -44,9 +44,10 @@ impl Thread {
 
     }
 
-    pub fn new(id : ThreadId,start: ::mem::VirtualAddress, arg : usize) -> Self {
+// TODO: remove the start address
+    pub fn new(id : ThreadId, arg : usize) -> Self {
         Thread {
-            ctx: platform::new_thread(Thread::allocate_stack(), start, arg),
+            ctx: platform::new_thread(Thread::allocate_stack(), arg),
             ready: true,
             id: id,
             wake_on: 0,
@@ -55,7 +56,7 @@ impl Thread {
 
     pub fn new_cur_thread(id : ThreadId) -> Self {
         Thread{
-                    ctx : platform::new_thread(::mem::VirtualAddress(0),::mem::VirtualAddress(0),0),
+                    ctx : platform::new_thread(::mem::VirtualAddress(0),0),
                     ready: true,
                     id : id,
                     wake_on: 0,

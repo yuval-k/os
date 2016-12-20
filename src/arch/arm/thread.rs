@@ -1,4 +1,6 @@
 use core::intrinsics::volatile_store;
+use collections::boxed::Box;
+use alloc::boxed::FnBox;
 
 const SP_OFFSET: u32 = 0;
 
@@ -87,14 +89,26 @@ extern "C" fn new_thread_trampoline2(old_thread : *const ::thread::Thread, new_t
     // and then delete assembly..
     super::cpu::enable_interrupts();
 
-        unsafe {
-        asm!("
-          mov r0, $0
-          bx $1
-          ":: "r"(arg), "r"(f) 
-        :  : "volatile")
+    let oldthreaed_ref = 
+    if old_thread == (0 as *const ::thread::Thread) {
+        None
+    } else {
+        unsafe{ Some(&*old_thread) }
+    };
+      
+    let arg: Box<Box<FnBox()>> = unsafe {
+        let functorun : *mut Box<FnBox()> =  arg as *mut u32 as *mut Box<FnBox()> ;
+        Box::from_raw(functorun)
     };
 
+    let new_thread_ref = unsafe {
+        &*new_thread
+    };
+
+    ::sched::Sched::thread_start(oldthreaed_ref, new_thread_ref, arg);
+    unsafe {
+        ::core::intrinsics::unreachable();
+    }
 }
 
 // gets stack arg from non scratch regs
@@ -117,11 +131,10 @@ extern "C" fn new_thread_trampoline1() {
 const NEW_CSPR: u32 = super::cpu::SUPER_MODE;
 
 pub fn new_thread(stack: ::mem::VirtualAddress,
-                  start: ::mem::VirtualAddress,
                   arg: usize)
                   -> Context {
 
-    if start.0 == 0 {
+    if arg == 0 {
         // this is the current thread, so no need to init anything
         return Context {
            sp: 0,
@@ -157,7 +170,7 @@ pub fn new_thread(stack: ::mem::VirtualAddress,
     unsafe { volatile_store(stack.0 as *mut u32, 0); }
     // store r5
     stack = stack.offset(-4);
-    unsafe { volatile_store(stack.0 as *mut u32, start.0 as u32); }
+    unsafe { volatile_store(stack.0 as *mut u32, 0 as u32); }
     // store r4
     stack = stack.offset(-4);
     unsafe { volatile_store(stack.0 as *mut u32, arg as u32); }
