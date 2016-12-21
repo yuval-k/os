@@ -15,10 +15,6 @@ extern {
      fn switch_context3(current_context: *const Context, new_context: *const Context, old_thread : *const ::thread::Thread, new_thread : *const ::thread::Thread);
 }
 
-// switch context without an interrupt.
-// called from kernel yeilding functions in system mode.
-// TODO change 
-// TODO: This has to be an assembly naked function so we can control the stack :(
 pub fn switch_context<'a,'b>(current_context: Option< &'a  ::thread::Thread>, new_context: &'b ::thread::Thread) -> Option<&'a ::thread::Thread>  {
     // no need to save the non-scratch registers, as caller shouldn't care about the
     // scratch registers or cpsr
@@ -35,6 +31,8 @@ pub fn switch_context<'a,'b>(current_context: Option< &'a  ::thread::Thread>, ne
 }
 
 
+// TODO: This has to be an assembly naked function so we can control the stack :(
+// Note the hack - the actual function is switch_context3
 #[naked]
 extern "C" fn switch_context2(current_context: *const Context, new_context: *const Context, old_thread : *const ::thread::Thread, new_thread : *const ::thread::Thread) {
 
@@ -46,6 +44,8 @@ extern "C" fn switch_context2(current_context: *const Context, new_context: *con
             /* store all regs in the stack - cause we can!  */
             push {r4-r12,r14}
             /* save to r0, restore from r1 */
+            /* TODO : might not need to save cspr, as this should always happen from the same mode */
+
             /* old context saved! */
 
             /* store sp */
@@ -61,13 +61,10 @@ extern "C" fn switch_context2(current_context: *const Context, new_context: *con
             clrex
 
             /* TODO: add MemBar incase thread goes to other cpu */
-            /*
-            move the thread objects to r0 and r0
-
-            */
+            /* move the thread objects to r0 and r0 */
             mov r0, r2
             mov r1, r3
-            
+            // TODO: restore cspr
             bx lr
           ":: "i"( SP_OFFSET ) :: "volatile")
     };
@@ -79,14 +76,8 @@ extern "C" fn switch_context2(current_context: *const Context, new_context: *con
 }
     /* enable interrupts for new thread, as cspr is at unknown state..*/
 #[no_mangle]
-extern "C" fn new_thread_trampoline2(old_thread : *const ::thread::Thread, new_thread : *const ::thread::Thread, arg: u32, f : u32) {
+extern "C" fn new_thread_trampoline2(old_thread : *const ::thread::Thread, new_thread : *const ::thread::Thread) {
 
-    // TODO:
-    // release_old_thread();
-    // acquire_new_thread();
-
-    // TODO: make sure that f is a extern "C" function 
-    // and then delete assembly..
     super::cpu::enable_interrupts();
 
     let oldthreaed_ref = 
@@ -95,17 +86,12 @@ extern "C" fn new_thread_trampoline2(old_thread : *const ::thread::Thread, new_t
     } else {
         unsafe{ Some(&*old_thread) }
     };
-      
-    let arg: Box<Box<FnBox()>> = unsafe {
-        let functorun : *mut Box<FnBox()> =  arg as *mut u32 as *mut Box<FnBox()> ;
-        Box::from_raw(functorun)
-    };
 
     let new_thread_ref = unsafe {
         &*new_thread
     };
 
-    ::sched::Sched::thread_start(oldthreaed_ref, new_thread_ref, arg);
+    ::sched::Sched::thread_start(oldthreaed_ref, new_thread_ref);
     unsafe {
         ::core::intrinsics::unreachable();
     }
@@ -117,8 +103,7 @@ extern "C" fn new_thread_trampoline1() {
 
     unsafe {
         asm!("
-          mov r2, r4
-          mov r3, r5
+        /* r0 and r1 contain new and old thread respectivly*/
           b new_thread_trampoline2
           "::
         :  : "volatile")
@@ -130,11 +115,10 @@ extern "C" fn new_thread_trampoline1() {
 // cspr in system mode with interrupts enabled and no flags.
 const NEW_CSPR: u32 = super::cpu::SUPER_MODE;
 
-pub fn new_thread(stack: ::mem::VirtualAddress,
-                  arg: usize)
+pub fn new_thread(stack: ::mem::VirtualAddress)
                   -> Context {
 
-    if arg == 0 {
+    if stack.0 == 0 {
         // this is the current thread, so no need to init anything
         return Context {
            sp: 0,
@@ -173,17 +157,9 @@ pub fn new_thread(stack: ::mem::VirtualAddress,
     unsafe { volatile_store(stack.0 as *mut u32, 0 as u32); }
     // store r4
     stack = stack.offset(-4);
-    unsafe { volatile_store(stack.0 as *mut u32, arg as u32); }
+    unsafe { volatile_store(stack.0 as *mut u32, 0 as u32); }
 
     Context {
         sp: stack.0 as u32,
     }
 }
-
-// pub struct Thread {
-// context : thread::Context,
-// sp : ::mem::VirtualAddress,
-// TODO make sure we support clousures
-// func : fn()
-// }
-//

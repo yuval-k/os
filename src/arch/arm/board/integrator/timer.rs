@@ -30,14 +30,14 @@ bitflags! {
 
 pub struct Timer {
     base: ::mem::VirtualAddress, // this should be mapped to TIMERS_BASE
-    callback: Rc<platform::InterruptSource>,
+    callback: &'static platform::InterruptSource,
 }
 
 
 impl Timer {
     pub fn new(index: usize,
                timerbase: ::mem::VirtualAddress,
-               callback: Rc<platform::InterruptSource>)
+               callback: &'static platform::InterruptSource)
                -> Timer {
         Timer {
             base: timerbase.uoffset(index * TIMER_BASE_OFFSET),

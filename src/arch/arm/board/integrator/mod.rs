@@ -86,8 +86,10 @@ pub fn write_to_console(s: &str) {
 }
 
 pub struct PlatformServices {
-//    pic : Box<pic::PIC>
+  //  pic : Box<pic::PIC>
 }
+
+
 
 // This function should be called when we have a heap and a scheduler.
 pub fn init_board() -> PlatformServices {
@@ -96,10 +98,10 @@ pub fn init_board() -> PlatformServices {
 
     let mut pic_ = Box::new(pic::PIC::new(mapper.p2v(pic::PIC_BASE_PADDR).unwrap()));
 
-/*
+
     // start a timer
     let mut tmr =
-        Box::new(timer::Timer::new(1, mapper.p2v(timer::TIMERS_BASE).unwrap(), sched_intr));
+        Box::new(timer::Timer::new(1, mapper.p2v(timer::TIMERS_BASE).unwrap(), &::platform::get_platform_services().scheduler));
 
     // timer 1 is 1mhz
     let counter = 1_000_000 / (ticks_in_second as u32);
@@ -107,13 +109,13 @@ pub fn init_board() -> PlatformServices {
 
 
     pic_.add_timer_callback(tmr);
-    */
+    
     pic_.enable_interrupts(pic::TIMERINT1);
 
     // TODO not move the pic to the vector table.
     vector::get_vec_table().set_irq_callback(pic_);
 
     PlatformServices{
-    //    pic: pic_
+      //  pic: pic_
     }
 }

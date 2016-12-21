@@ -54,9 +54,15 @@ impl Sched {
         self.sched_impl.borrow_mut().idle_threads.push(idle);
     }
 
-    pub fn thread_start(current_context: Option< &::thread::Thread>, new_context: &::thread::Thread, start: Box<Box<FnBox()>>) {
+// TODO move start to thread object.
+    pub fn thread_start(current_context: Option< &::thread::Thread>, new_context: &::thread::Thread) {
+
+        // release_old_thread();
+        // acquire_new_thread();
+
+        (new_context.func.borrow_mut().take().unwrap())();
+        
         unsafe {
-            start();
             platform::get_platform_services().get_scheduler().exit_thread();
         }
     }
@@ -64,10 +70,8 @@ impl Sched {
     fn new_thread_obj<F>(tid: ThreadId, f: F) -> Box<thread::Thread>
         where F: FnOnce(),
               F: Send + 'static {
-        let p: Box<FnBox()> = Box::new(f);
-        let ptr = Box::into_raw(Box::new(p)) as *const usize as usize; // some reson without another box ptr is 1
 
-        Box::new(thread::Thread::new(tid, ptr))
+        Box::new(thread::Thread::new(tid,  Box::new(f)))
     }
 
     pub fn spawn<F>(&self, f: F)
@@ -169,15 +173,18 @@ impl Sched {
 
 
         if Some(curr_thread) != new_thread {
-            let simpl = self.sched_impl.borrow();
-            let cur_thread_box = &simpl.threads[curr_thread];
+            {
+                let simpl = self.sched_impl.borrow();
+                let cur_thread_box = &simpl.threads[curr_thread];
 
-            let new_thread_box : &::thread::Thread = if let Some(index) = new_thread {
-              &simpl.threads[index]
-            } else {
-                // TODO: SMP: get cpu id and return proper thread
-                &simpl.idle_threads[0]
-            };
+                let new_thread_box : &::thread::Thread = if let Some(index) = new_thread {
+                &simpl.threads[index]
+                } else {
+                    // TODO: SMP: get cpu id and return proper thread
+                    &simpl.idle_threads[0]
+                };
+                // end the simpl borrow.
+            }
 
             let oldT = platform::switch_context(Some(cur_thread_box.as_ref()), new_thread_box);
             // we get here when context is switch back to us
@@ -281,6 +288,7 @@ fn handle_interrupts() {
 
 
 // for the timer interrupt..
+// TODO: delete..
 impl platform::InterruptSource for Sched {
     // this method is called platform::ticks_in_second times a second
     fn interrupted(&self, ctx: &mut platform::Context) {

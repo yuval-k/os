@@ -3,6 +3,9 @@ use core::sync::atomic;
 use core::ops::Drop;
 use platform;
 use platform::ThreadId;
+use collections::boxed::Box;
+use alloc::boxed::FnBox;
+use core::cell::RefCell;
 
 pub struct Thread {
     pub ctx: super::platform::ThreadContext,
@@ -15,6 +18,7 @@ pub struct Thread {
                    * owns: Vec<u32>,
                    * blocks_on: u32,
                    * */
+    pub func : RefCell<Option<Box<FnBox()>>>,
 }
 
 static STACK_BASE_COUNTER: atomic::AtomicUsize = atomic::ATOMIC_USIZE_INIT;
@@ -45,21 +49,23 @@ impl Thread {
     }
 
 // TODO: remove the start address
-    pub fn new(id : ThreadId, arg : usize) -> Self {
+    pub fn new(id : ThreadId, f: Box<FnBox()>) -> Self {
         Thread {
-            ctx: platform::new_thread(Thread::allocate_stack(), arg),
+            ctx: platform::new_thread(Thread::allocate_stack()),
             ready: true,
             id: id,
             wake_on: 0,
+            func : RefCell::new(Some(f)),
         }
     }
 
     pub fn new_cur_thread(id : ThreadId) -> Self {
         Thread{
-                    ctx : platform::new_thread(::mem::VirtualAddress(0),0),
+                    ctx : platform::new_thread(::mem::VirtualAddress(0)),
                     ready: true,
                     id : id,
                     wake_on: 0,
+                    func : RefCell::new(None),
         }
     }
 

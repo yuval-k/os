@@ -93,12 +93,20 @@ extern "C" fn vector_entry() -> !{
           */
           add sp, sp, $1
           /* switch to the mode we came from, if it user mode, change to system mode */
+
+          /* get the rest of the control bits */
+          mrs r2, cpsr
+          and r2, r2, #0xFF
+          bic r2, r2, $2
+
           /* mask the mode */
           and r1, r1 , $2
           /* check if user mode */
           cmp r1, $4
           /* if user mode, change to system mode */
           moveq r1, $5
+          /* add the other flags */
+          orr   r1, r1, r2
           /* change back to original mode to grab sp and lr */
           msr cpsr_c, r1
 
@@ -107,12 +115,14 @@ extern "C" fn vector_entry() -> !{
           str sp, [r0, #-4]!
 
           mov r1, $3
+          /* add the other flags */
+          orr   r1, r1, r2
           msr cpsr_c, r1
           /* move on */
           bl $0
           /* should not get here */
     ":: "i"(vector_with_context as extern "C" fn(_) ),
-        "i"(SIZE_OF_INT_CTX),
+        "i"(SIZE_OF_INT_CTX - 2*4 /* lr and sp are pushed after stack is fixed */),
         "i"(super::cpu::MODE_MASK),
         "i"(super::cpu::SUPER_MODE),
         "i"(super::cpu::USER_MODE),
