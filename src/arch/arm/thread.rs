@@ -10,31 +10,45 @@ pub struct Context {
     sp : u32,
 }
 
-
-extern {
-     fn switch_context3(current_context: *const Context, new_context: *const Context, old_thread : *const ::thread::Thread, new_thread : *const ::thread::Thread);
-}
-
-pub fn switch_context<'a,'b>(current_context: Option< &'a  ::thread::Thread>, new_context: &'b ::thread::Thread) -> Option<&'a ::thread::Thread>  {
+// ?!?!
+pub fn switch_context(current_thread: Option< Box<::thread::Thread>>, new_thread: Box<::thread::Thread>) -> (Option<Box<::thread::Thread>>, Box<::thread::Thread>)  {
     // no need to save the non-scratch registers, as caller shouldn't care about the
     // scratch registers or cpsr
-    let (current_context_ref, current_thread_ref) = if let Some(t) = current_context {
-        (&t.ctx as *const Context,t as *const ::thread::Thread)
+    let (current_context_ref, current_thread_ref) = if let Some(mut t) = current_thread {
+        (&mut t.ctx as *mut Context, Box::into_raw(t))
     } else {
-        (0 as *const Context, 0 as *const ::thread::Thread)
+        (0 as *mut Context, 0 as *mut ::thread::Thread)
     };
-    
+
+    let ctx_ptr = &new_thread.ctx as *const Context;
+
+    let new_thread_ref = Box::into_raw(new_thread);
     unsafe {
-        switch_context3(current_context_ref, &new_context.ctx, current_thread_ref, new_context);
+        switch_context3(current_context_ref, ctx_ptr, current_thread_ref, new_thread_ref);
     }
-    return current_context;
+
+    let current_thread = if current_thread_ref == (0 as *mut ::thread::Thread) {
+        None
+    } else {
+        Some(unsafe{Box::from_raw(current_thread_ref)})
+    };
+
+    (current_thread,unsafe{ Box::from_raw(new_thread_ref)})
 }
 
 
-// TODO: This has to be an assembly naked function so we can control the stack :(
-// Note the hack - the actual function is switch_context3
+/* This has to be an assembly naked function so we can control the stack :(
+    unfortunatly, because the function takes arguments, rust will still modify the stack
+    before my assembly code starts.
+    hacky solution - create a label and call that instead! 
+    switch_context3 is declared as extern
+    switch_context2 can now be in theory without parameters, but i left them there for reference.
+*/
+extern {
+     fn switch_context3(current_context: *mut Context, new_context: *const Context, old_thread : *mut ::thread::Thread, new_thread : *mut ::thread::Thread);
+}
 #[naked]
-extern "C" fn switch_context2(current_context: *const Context, new_context: *const Context, old_thread : *const ::thread::Thread, new_thread : *const ::thread::Thread) {
+extern "C" fn switch_context2(current_context: *mut Context, new_context: *const Context, old_thread : *mut ::thread::Thread, new_thread : *mut ::thread::Thread) {
 
     unsafe {
         asm!("
@@ -64,7 +78,6 @@ extern "C" fn switch_context2(current_context: *const Context, new_context: *con
             /* move the thread objects to r0 and r0 */
             mov r0, r2
             mov r1, r3
-            // TODO: restore cspr
             bx lr
           ":: "i"( SP_OFFSET ) :: "volatile")
     };
@@ -76,22 +89,16 @@ extern "C" fn switch_context2(current_context: *const Context, new_context: *con
 }
     /* enable interrupts for new thread, as cspr is at unknown state..*/
 #[no_mangle]
-extern "C" fn new_thread_trampoline2(old_thread : *const ::thread::Thread, new_thread : *const ::thread::Thread) {
+extern "C" fn new_thread_trampoline2(old_thread : *mut ::thread::Thread, new_thread : *mut ::thread::Thread) {
 
-    super::cpu::enable_interrupts();
-
-    let oldthreaed_ref = 
-    if old_thread == (0 as *const ::thread::Thread) {
+    let old_thread = if old_thread == (0 as *mut ::thread::Thread) {
         None
     } else {
-        unsafe{ Some(&*old_thread) }
+        unsafe{Some(Box::from_raw(old_thread))}
     };
+    let new_thread = unsafe{Box::from_raw(new_thread)};
 
-    let new_thread_ref = unsafe {
-        &*new_thread
-    };
-
-    ::sched::Sched::thread_start(oldthreaed_ref, new_thread_ref);
+    ::sched::Sched::thread_start(old_thread, new_thread);
     unsafe {
         ::core::intrinsics::unreachable();
     }

@@ -39,7 +39,7 @@ impl<T: ?Sized> CpuMutex<T> {
     }
 
     fn obtain_lock(&self) {
-        let curcpu = ::platform::get_current_cpu() as isize;
+        let curcpu = ::platform::get_current_cpu_id() as isize;
         if self.owner.load(atomic::Ordering::Acquire) == curcpu {
             self.recursion.set(self.recursion.get() + 1);
             return
@@ -56,7 +56,7 @@ impl<T: ?Sized> CpuMutex<T> {
 
 
     fn release_lock(&self) {
-        let curcpu = ::platform::get_current_cpu() as isize;
+        let curcpu = ::platform::get_current_cpu_id() as isize;
         if self.owner.load(atomic::Ordering::Acquire) != curcpu {
             // this is a bug!
         }

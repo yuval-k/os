@@ -19,6 +19,8 @@ pub struct Thread {
                    * blocks_on: u32,
                    * */
     pub func : RefCell<Option<Box<FnBox()>>>,
+    pub cpu_affinity: Option<usize>,
+    pub priority: usize,
 }
 
 static STACK_BASE_COUNTER: atomic::AtomicUsize = atomic::ATOMIC_USIZE_INIT;
@@ -56,6 +58,8 @@ impl Thread {
             id: id,
             wake_on: 0,
             func : RefCell::new(Some(f)),
+            cpu_affinity: None,
+            priority: 1,
         }
     }
 
@@ -66,6 +70,8 @@ impl Thread {
                     id : id,
                     wake_on: 0,
                     func : RefCell::new(None),
+                    cpu_affinity: None,
+                    priority: 1,
         }
     }
 

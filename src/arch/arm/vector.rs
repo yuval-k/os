@@ -43,21 +43,23 @@ macro_rules! inthandler {
 
 extern "C" fn vector_with_context(ctx : &InterruptContext) {
 
-    // copy the interrupt context from interrupt stack to us 
+    // copy the interrupt context from interrupt stack to our stack
     // (we are on kernel stack)
     let mut c : InterruptContext = *ctx;
     
     $handler(&mut c);
 
-    // restore everything..
+    // restore everything - returns interrupted code.
     unsafe{
     asm!("mov r0, $0
         /* r0 has InterruptContext */
+        /* pop things in reverse order than in vector_entry */
         ldr sp, [r0, #4]!
         ldr lr, [r0, #4]!
         /* load spsr */
         ldmia r0!, {r1}
         mrs r1, spsr
+        /* restore registers, pc and cpsr (from spsr) */
         ldmia r0, {r0-r12, pc}^
         "
         :: "r"(&c)
@@ -89,14 +91,16 @@ extern "C" fn vector_entry() -> !{
           mov r0, sp
           /* restore stack to the original location */
           /* this is a bit weird as i am going to use the 'freed' stack soon..
-          but interrupts are disable so  hopefully will be ok
+          but interrupts are disable so should be ok
           */
           add sp, sp, $1
           /* switch to the mode we came from, if it user mode, change to system mode */
 
           /* get the rest of the control bits */
           mrs r2, cpsr
+          /* mask everything but control */
           and r2, r2, #0xFF
+          /* remove the mode bits */
           bic r2, r2, $2
 
           /* mask the mode */
@@ -114,9 +118,11 @@ extern "C" fn vector_entry() -> !{
           str lr, [r0, #-4]!
           str sp, [r0, #-4]!
 
+          /* set to supervisor mode */
           mov r1, $3
           /* add the other flags */
           orr   r1, r1, r2
+          /* change mode! */
           msr cpsr_c, r1
           /* move on */
           bl $0
@@ -136,7 +142,9 @@ vector_entry
     }}
 }
 
-
+/*
+ this function is never called, i just it to avoid more assembly files
+*/
 #[naked]
 fn vector_table_asm() {
     unsafe {
@@ -213,6 +221,9 @@ fn vector_prefetch_abort_handler(_: &mut InterruptContext) {
 fn vector_data_abort_handler(ctx: &mut InterruptContext) {
     use collections::String;
     use core::fmt::Write;
+    // data about is lr - 8; the macro gave us lr -4 in pc, so just fix the missing 4 bytes
+
+    ctx.pc -= 4;
 
     platform::write_to_console("Data abort!");
     let mut w = String::new();

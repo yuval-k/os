@@ -29,6 +29,7 @@ pub mod sched;
 pub mod sync;
 pub mod thread;
 pub mod platform;
+pub mod cpu;
 
 
 use collections::boxed::Box;
@@ -67,6 +68,7 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
             ), 
             frame_alloc: farc.clone(),
             arch_services: None,
+            cpus : vec![::cpu::CPU::new(platform::get_current_cpu_id())]
         };
     unsafe{
         platform::set_platform_services(p_s);

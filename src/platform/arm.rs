@@ -11,7 +11,7 @@ pub type ThreadContext = ::arch::arm::thread::Context;
 pub use ::arch::arm::thread::new_thread;
 pub use ::arch::arm::thread::switch_context;
 pub use ::arch::arm::ticks_in_second;
-pub use ::arch::arm::cpu::get_current_cpu;
+pub use ::arch::arm::cpu::get_current_cpu_id;
 
 pub type ArchPlatformServices = ::arch::arm::PlatformServices;
 

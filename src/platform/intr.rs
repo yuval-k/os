@@ -5,6 +5,9 @@ use core::ops::{Drop, Deref, DerefMut};
 use super::get_interrupts;
 use super::set_interrupts;
 
+pub fn enable_interrupts() {
+    set_interrupts(false);
+}
 
 pub fn no_interrupts() -> InterruptGuardOneShot {
     let old_state = get_interrupts();
@@ -22,8 +25,6 @@ impl Drop for InterruptGuardOneShot {
         set_interrupts(self.to_state);
     }
 }
-
-
 
 pub struct InterruptGuard<T: ?Sized> {
     data: UnsafeCell<T>,

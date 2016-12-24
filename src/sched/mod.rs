@@ -1,5 +1,6 @@
 use collections::Vec;
 use collections::boxed::Box;
+use  core::sync::atomic;
 use alloc::boxed::FnBox;
 use core::cell::RefCell;
 use core::cell::Cell;
@@ -16,14 +17,11 @@ const WAKE_NEVER: u64 = 0xFFFFFFFF_FFFFFFFF;
 // TODO this is the one mega unsafe class, so it needs to take care of it's on safety.
 pub struct Sched {
     sched_impl : RefCell<SchedImpl>,
-    cpu_mutex : sync::CpuMutex<()>
 }
 
 struct SchedImpl {
-    threads: Vec<Box<thread::Thread>>,
-    idle_threads: Vec<Box<thread::Thread>>,
-    curr_thread_index: Option<usize>,
-    thread_id_counter: usize,
+    threads: sync::CpuMutex<Vec<Box<thread::Thread>>>,
+    thread_id_counter: atomic::AtomicUsize,
     time_since_boot_millies: u64,
 }
 
@@ -34,33 +32,45 @@ const MAIN_THREAD_ID: ThreadId = ThreadId(1);
 impl Sched {
     pub fn new() -> Sched {
         Sched {
-        cpu_mutex : sync::CpuMutex::new(()), 
         sched_impl : RefCell::new(SchedImpl {
             // fake thread as this main thread..
-            threads: vec![Box::new(
+            threads: sync::CpuMutex::new(vec![Box::new(
                 thread::Thread::new_cur_thread(MAIN_THREAD_ID)
                 )
-                ],
-            idle_threads: Vec::new(),
-            curr_thread_index : Some(0),
-            thread_id_counter : 10,
+                ]),
+            thread_id_counter : atomic::AtomicUsize::new(10),
             time_since_boot_millies : 0,
         })
         }
     }
 
     pub fn add_idle_thread_for_cpu(&mut self) {
-        let idle = Self::new_thread_obj(IDLE_THREAD_ID, platform::wait_for_interrupts );
-        self.sched_impl.borrow_mut().idle_threads.push(idle);
+        let mut idle = Self::new_thread_obj(IDLE_THREAD_ID, platform::wait_for_interrupts );
+        idle.cpu_affinity = Some(platform::get_current_cpu_id());
+        idle.priority = 0;
+        let simpl = self.sched_impl.borrow_mut();
+        simpl.threads.lock().push(idle);
     }
 
 // TODO move start to thread object.
-    pub fn thread_start(current_context: Option< &::thread::Thread>, new_context: &::thread::Thread) {
+    pub fn thread_start(old_thread: Option<Box<::thread::Thread>>, new_thread: Box<::thread::Thread>) {
 
         // release_old_thread();
         // acquire_new_thread();
+        // TODO assert that running thread is None.
+        let newthreadfun = new_thread.func.borrow_mut().take().unwrap();
+        ::platform::get_platform_services().get_current_cpu().running_thread = Some(new_thread);
 
-        (new_context.func.borrow_mut().take().unwrap())();
+        if let Some(old) = old_thread {
+            let simpl = platform::get_platform_services().get_scheduler().sched_impl.borrow();
+            let mut threads = simpl.threads.lock();
+            threads.push(old);
+        }
+
+        // all plumbing set! we can enable interrupts
+        ::platform::intr::enable_interrupts();
+
+        (newthreadfun)();
         
         unsafe {
             platform::get_platform_services().get_scheduler().exit_thread();
@@ -78,84 +88,110 @@ impl Sched {
         where F: FnOnce(),
               F: Send + 'static {
         // TODO thread safety and SMP Support
-        let mut simpl = self.sched_impl.borrow_mut();
-        simpl.thread_id_counter +=1;
+        let simpl = self.sched_impl.borrow();
+        let tid = simpl.thread_id_counter.fetch_add(1, atomic::Ordering::SeqCst);
 
-        let t = Self::new_thread_obj(ThreadId(simpl.thread_id_counter), f);
+        let t = Self::new_thread_obj(ThreadId(tid), f);
 
         let ig = platform::intr::no_interrupts();
-        let guard = self.cpu_mutex.lock();
-        simpl.threads.push(t);
-        // find an eligble thread
-        // threads.map()
+        simpl.threads.lock().push(t);
     }
 
-    fn schedule_new(&self)  {
+    fn can_current_continue(&self) -> bool {
+
+        let curthread = platform::get_platform_services().get_current_cpu().running_thread.as_ref().unwrap();
+        if ! curthread.ready {
+            return false;
+        }
+                
+        let simpl = self.sched_impl.borrow();
+        let threads = simpl.threads.lock();
+        
+        // is there one other thread that can run?
+        threads.iter().filter(|&t| t.ready == true).filter(|&t| (t.cpu_affinity == None) || (t.cpu_affinity == Some(platform::get_current_cpu_id()))).
+        filter(|&t| t.priority >= curthread.priority).next().is_some()
+    }
+
+    fn schedule_new(&self) -> Box<::thread::Thread> {
         // find an eligble thread
         // threads.map()
-        let mut simpl = self.sched_impl.borrow_mut();
+        let simpl = self.sched_impl.borrow();
+        let mut threads = simpl.threads.lock();
+/*
+        // wake up a sleeping threads
+        for sleepingt in threads
+        .filter(|&t| t.ready == false)
+        .filter(|&t| t.wake_on != WAKE_NEVER)
+        .filter(|&t| t.wake_on <= time_since_boot_millies) {
+            sleepingt.wake_on = 0;
+            sleepingt.ready = true;
+        }
+*/
+        let num_threads = threads.len();
 
-        let mut cur_th = if let Some(cur_th_i) = simpl.curr_thread_index { cur_th_i} else { 0 };
-
-        let num_threads = simpl.threads.len();
-        for _ in 0..num_threads {
-            cur_th += 1;
-
-            if cur_th == num_threads {
-                cur_th = 0;
-            }
-
-            {
-                let time_since_boot_millies = simpl.time_since_boot_millies;
-                let cur_thread = &mut simpl.threads[cur_th];
-                if (cur_thread.wake_on != WAKE_NEVER) &&
-                   (cur_thread.wake_on <= time_since_boot_millies) {
-                    cur_thread.wake_on = 0;
-                    cur_thread.ready = true;
+        for i in 0..num_threads {
+            let chosen = {
+                let mut cur_thread = &mut threads[i];
+                if  cur_thread.priority == 0 {
+                    continue;
                 }
-            }
+                let affinity =  cur_thread.cpu_affinity;
+                if (affinity != None) && (affinity != Some(platform::get_current_cpu_id())) {
+                    continue;
+                }
 
-            let cur_thread_ready = simpl.threads[cur_th].ready;
-            if cur_thread_ready {
-                simpl.curr_thread_index = Some(cur_th);
+                {
+                    let time_since_boot_millies = simpl.time_since_boot_millies;
+                    if (cur_thread.wake_on != WAKE_NEVER) &&
+                    (cur_thread.wake_on >= time_since_boot_millies) {
+                        cur_thread.wake_on = 0;
+                        cur_thread.ready = true;
+                    }
+                }
+
+                cur_thread.ready
+            };
+
+            if chosen {
+                return threads.swap_remove(i);
             }
         }
-        // no thread is ready.. time to sleep sleep...
+
+        // no thread is ready.. time to sleep sleep... find the idle thread:
+
+        for i in 0..num_threads {
+
+            if  threads[i].priority != 0 {
+                continue;
+            }
+            let affinity =  threads[i].cpu_affinity;
+            if affinity == Some(platform::get_current_cpu_id()) {
+                return threads.swap_remove(i);
+            }
+        }
         // return to the idle thread.
-        simpl.curr_thread_index = None;
+        panic!("No thread to run!")
     }
 
     pub fn exit_thread(&self) {
         // disable interrupts
         let ig = platform::intr::no_interrupts();
-        let guard = self.cpu_mutex.lock();
 
-        {
-            let mut simpl = self.sched_impl.borrow_mut();
-            // remove the current thread
-            let cur_th = simpl.curr_thread_index.unwrap();
-            simpl.threads.remove(cur_th);
-        }
+        let curr_thread = ::platform::get_platform_services().get_current_cpu().running_thread.take().unwrap();
+        // TODO place in deleted threads list..
+        // instead of leaking the thread..
+        ::core::mem::forget(curr_thread);
 
-        let new_context = self.schedule_new();
-        // tmp ctx.. we don't really gonna use it...
+        let new_thread = self.schedule_new();
 
-        // borrow read only
-        // TODO: this is going to fail - need to end borrow before the context switch
-        let simpl = self.sched_impl.borrow();
-        let cur_thread_box = &simpl.threads[simpl.curr_thread_index.unwrap()];
-        
-        platform::switch_context(None, cur_thread_box.as_ref());
-
-        // TODO - stack leaks here.. 
-        // need to register the thread for clean up..
+        platform::switch_context(None, new_thread);
+        // never gonna get here..
 
     }
 
     pub fn yield_thread(&self) {
         // disable interrupts
         let ig = platform::intr::no_interrupts();
-        let guard = self.cpu_mutex.lock();
         self.yeild_thread_no_intr()
 
     }
@@ -163,51 +199,53 @@ impl Sched {
     fn yeild_thread_no_intr(&self) {
 
         // this can't be the idle thread...
-        let curr_thread = { self.sched_impl.borrow().curr_thread_index.unwrap() };
 
-        // TODO: should we add a mutex for smp?
-
-        self.schedule_new();
-
-        let new_thread = { self.sched_impl.borrow().curr_thread_index };
-
-
-        if Some(curr_thread) != new_thread {
-            {
-                let simpl = self.sched_impl.borrow();
-                let cur_thread_box = &simpl.threads[curr_thread];
-
-                let new_thread_box : &::thread::Thread = if let Some(index) = new_thread {
-                &simpl.threads[index]
-                } else {
-                    // TODO: SMP: get cpu id and return proper thread
-                    &simpl.idle_threads[0]
-                };
-                // end the simpl borrow.
-            }
-
-            let oldT = platform::switch_context(Some(cur_thread_box.as_ref()), new_thread_box);
-            // we get here when context is switch back to us
-            // TODO: SMP: mark that the old thread is no longer running on CPU
-
+        if self.can_current_continue() {
+            return
         }
-    }
 
-    pub fn unschedule_no_intr(&self) {
-        let mut simpl = self.sched_impl.borrow_mut();
-        let cur_th = simpl.curr_thread_index.unwrap();
+        // current thread can't continue to run..
+        // take the current thread from CPU
+        let curr_thread = ::platform::get_platform_services().get_current_cpu().running_thread.take().unwrap();
 
-        let ref mut t = simpl.threads[cur_th];
-        t.ready = false;
-        if t.wake_on == 0 {
-            t.wake_on = WAKE_NEVER;
+        let new_thread = self.schedule_new();
+
+        // take new out from the thread list, and switch to it
+        // current <- cpu.current
+        // new thread = schedule(){threads.remove(tid)}
+        // if scedule turns none, do nothing..
+        // if it returns a thread of lower priority
+        // old = switch(current, new)
+        // after switch, current shoud go on cpu
+        // // cpu.current should be == old 
+        // // and the old new is now current
+        // cpu.current = current
+        // threads.insert(old)
+
+        let (old, current) = platform::switch_context(Some(curr_thread), new_thread);
+
+        ::platform::get_platform_services().get_current_cpu().running_thread = Some(current);
+
+        if let Some(old) = old {
+            let simpl = self.sched_impl.borrow();
+            let mut threads = simpl.threads.lock();
+            threads.push(old);
         }
+
+        // cur_thread thread is now running!
+
+        // we get here when context is switch back to us
+        // TODO: SMP: mark that the old thread is no longer running on CPU
+        // oldT is the thing that was just running on the cpu
+        // re insert it to the thread list
+        // insert new to cpu current
+
+        
     }
 
     pub fn block(&self) {
         // disable interrupts
         let ig = platform::intr::no_interrupts();
-        let guard = self.cpu_mutex.lock();
         self.block_no_intr()
     }
 
@@ -215,31 +253,27 @@ impl Sched {
         // disable interrupts
         //TODO how to release cpu guard after the context was saved?!
         let ig = platform::intr::no_interrupts();
-        {
-            let guard = self.cpu_mutex.lock();
 
-            let mut simpl = self.sched_impl.borrow_mut();
-            let time_since_boot_millies = simpl.time_since_boot_millies;
-            let cur_th = simpl.curr_thread_index.unwrap();
-            let ref mut cur_thread = simpl.threads[cur_th];
-            cur_thread.wake_on = time_since_boot_millies + (millis as u64);
-            cur_thread.ready = false;
-        }
+        let cur_thread = platform::get_platform_services().get_current_cpu().running_thread.as_mut().unwrap();
+        cur_thread.wake_on = {
+            self.sched_impl.borrow().time_since_boot_millies + (millis as u64)
+        };
+        cur_thread.ready = false;
+        
         self.yeild_thread_no_intr()
+    }
+
+    pub fn unschedule_no_intr(&self) {
+        let t = platform::get_platform_services().get_current_cpu().running_thread.as_mut().unwrap();
+        t.ready = false;
+        if t.wake_on == 0 {
+            t.wake_on = WAKE_NEVER;
+        }
     }
 
     // assume interrupts are blocked
     pub fn block_no_intr(&self) {
-        {
-            let mut simpl = self.sched_impl.borrow_mut();
-            let cur_th = simpl.curr_thread_index.unwrap();
-
-            let ref mut t = simpl.threads[cur_th];
-            t.ready = false;
-            if t.wake_on == 0 {
-                t.wake_on = WAKE_NEVER;
-            }
-        }
+        self.unschedule_no_intr();
         self.yeild_thread_no_intr();
     }
 
@@ -251,9 +285,9 @@ impl Sched {
 
     // assume interrupts are blocked
     pub fn wakeup_no_intr(&self, tid: ThreadId) {
-        let mut simpl = self.sched_impl.borrow_mut();
-
-        for t in simpl.threads.iter_mut().filter(|x| x.id == tid) {
+        let simpl = self.sched_impl.borrow();
+        let mut threads = simpl.threads.lock();
+        for t in threads.iter_mut().filter(|x| x.id == tid) {
             // there can only be one..
             t.wake_on = 0;
             t.ready = true;
@@ -262,9 +296,7 @@ impl Sched {
     }
 
     pub fn get_current_thread(&self) -> ThreadId {
-        let simpl = self.sched_impl.borrow();
-
-        return simpl.threads[simpl.curr_thread_index.unwrap()].id;
+        platform::get_platform_services().get_current_cpu().running_thread.as_mut().unwrap().id
     }
 
     // TODO
@@ -294,8 +326,9 @@ impl platform::InterruptSource for Sched {
     fn interrupted(&self, ctx: &mut platform::Context) {
         const DELTA_MILLIS: u64= (1000 / platform::ticks_in_second) as u64;
         {
-            let mut simpl = self.sched_impl.borrow_mut();
-            simpl.time_since_boot_millies +=  DELTA_MILLIS;
+            let simpl = self.sched_impl.borrow();
+            // TODO fix time_since_boot_millies to be in cell?!
+            // simpl.time_since_boot_millies +=  DELTA_MILLIS;
         }
         // TODO: change to yeild? - we need yield to mark the unscheduled 
         // thread as unscheduled.. so it can continue to run on other cpus.. 

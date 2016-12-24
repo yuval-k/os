@@ -17,7 +17,7 @@ pub fn data_synchronization_barrier() {
 }
 
 #[inline(always)]
-pub fn get_current_cpu() -> u32 {
+pub fn get_current_cpu_id() -> usize {
     0
 }
 

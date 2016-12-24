@@ -20,12 +20,12 @@ pub fn data_synchronization_barrier() {
 }
 
 #[inline(always)]
-pub fn get_current_cpu() -> u32 {
+pub fn get_current_cpu_id() -> usize {
     let mut mpidr: u32;
     unsafe {
         asm!("mrc p15, 0, $0, c0, c0, 5" :  "=r" (mpidr));
     }
-    return mpidr & 0b111;
+    return (mpidr & 0b111) as usize;
 }
 
 // thanks https://www.raspberrypi.org/forums/viewtopic.php?f=72&t=11183

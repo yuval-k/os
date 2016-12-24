@@ -4,6 +4,7 @@ pub mod syscalls;
 use collections::boxed::Box;
 use alloc::rc::Rc;
 use core::cell::UnsafeCell;
+use collections::Vec;
 
 #[cfg(target_arch = "arm")]
 mod arm;
@@ -27,6 +28,7 @@ pub struct PlatformServices {
     pub mem_manager: Box<::mem::MemoryManagaer>, 
     pub frame_alloc: Rc<::mem::FrameAllocator>,
     pub arch_services: Option<ArchPlatformServices>,
+    pub cpus : Vec<::cpu::CPU>,
 }
 
 static mut platform_services: Option<UnsafeCell<PlatformServices>> = None;
@@ -56,5 +58,9 @@ pub fn get_mut_platform_services() -> &'static mut PlatformServices {
 impl PlatformServices {
     pub fn get_scheduler(&self) -> &super::sched::Sched {
         &get_platform_services().scheduler
+    }
+
+    pub fn get_current_cpu(&self) -> &mut ::cpu::CPU {
+        &mut self.cpus[get_current_cpu_id()]
     }
 }
