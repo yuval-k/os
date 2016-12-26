@@ -23,17 +23,22 @@ pub fn switch_context(current_thread: Option< Box<::thread::Thread>>, new_thread
     let ctx_ptr = &new_thread.ctx as *const Context;
 
     let new_thread_ref = Box::into_raw(new_thread);
-    unsafe {
-        switch_context3(current_context_ref, ctx_ptr, current_thread_ref, new_thread_ref);
-    }
-
+    let old_thread_ref = unsafe {
+        switch_context3(current_context_ref, ctx_ptr, current_thread_ref, new_thread_ref)
+    };
+    // we returned, so current thread is not None
     let current_thread = if current_thread_ref == (0 as *mut ::thread::Thread) {
+        panic!("Can't happen!!")
+    } else {
+        unsafe{Box::from_raw(current_thread_ref)}
+    };
+    let old_thread = if old_thread_ref == (0 as *mut ::thread::Thread) {
         None
     } else {
-        Some(unsafe{Box::from_raw(current_thread_ref)})
+        Some(unsafe{Box::from_raw(old_thread_ref)})
     };
 
-    (current_thread,unsafe{ Box::from_raw(new_thread_ref)})
+    (old_thread, current_thread)
 }
 
 
@@ -45,10 +50,10 @@ pub fn switch_context(current_thread: Option< Box<::thread::Thread>>, new_thread
     switch_context2 can now be in theory without parameters, but i left them there for reference.
 */
 extern {
-     fn switch_context3(current_context: *mut Context, new_context: *const Context, old_thread : *mut ::thread::Thread, new_thread : *mut ::thread::Thread);
+     fn switch_context3(current_context: *mut Context, new_context: *const Context, old_thread : *mut ::thread::Thread, new_thread : *mut ::thread::Thread) -> *mut ::thread::Thread;
 }
 #[naked]
-extern "C" fn switch_context2(current_context: *mut Context, new_context: *const Context, old_thread : *mut ::thread::Thread, new_thread : *mut ::thread::Thread) {
+extern "C" fn switch_context2(current_context: *mut Context, new_context: *const Context, old_thread : *mut ::thread::Thread, new_thread : *mut ::thread::Thread) -> *mut ::thread::Thread {
 
     unsafe {
         asm!("

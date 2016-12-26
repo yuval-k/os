@@ -206,7 +206,17 @@ fn vector_reset_handler(_: &mut InterruptContext) {
 
 }
 
-fn vector_undefined_handler(_: &mut InterruptContext) {
+fn vector_undefined_handler(ctx: &mut InterruptContext) {
+    use collections::String;
+    use core::fmt::Write;
+    // data about is lr - 8; the macro gave us lr -4 in pc, so just fix the missing 4 bytes
+
+    ctx.pc -= 4;
+
+    platform::write_to_console("Undefined abort!");
+    let mut w = String::new();
+    write!(&mut w, "Context: {:?}", ctx);
+    platform::write_to_console(&w);
     loop {}
 }
 
