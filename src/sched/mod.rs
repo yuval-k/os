@@ -59,7 +59,7 @@ impl Sched {
         // acquire_new_thread();
         // TODO assert that running thread is None.
         let newthreadfun = new_thread.func.borrow_mut().take().unwrap();
-        ::platform::get_platform_services().get_current_cpu().running_thread = Some(new_thread);
+        ::platform::get_platform_services().get_current_cpu().set_running_thread(new_thread);
 
         if let Some(old) = old_thread {
             let simpl = platform::get_platform_services().get_scheduler().sched_impl.borrow();
@@ -99,7 +99,8 @@ impl Sched {
 
     fn can_current_continue(&self) -> bool {
 
-        let curthread = platform::get_platform_services().get_current_cpu().running_thread.as_ref().unwrap();
+        let curthread_cell = platform::get_platform_services().get_current_cpu().get_running_thread().borrow();
+        let curthread = curthread_cell.as_ref().unwrap();
         if ! curthread.ready {
             return false;
         }
@@ -177,7 +178,7 @@ impl Sched {
         // disable interrupts
         let ig = platform::intr::no_interrupts();
 
-        let curr_thread = ::platform::get_platform_services().get_current_cpu().running_thread.take().unwrap();
+        let curr_thread = ::platform::get_platform_services().get_current_cpu().take_running_thread();
         // TODO place in deleted threads list..
         // instead of leaking the thread..
         ::core::mem::forget(curr_thread);
@@ -206,7 +207,7 @@ impl Sched {
 
         // current thread can't continue to run..
         // take the current thread from CPU
-        let curr_thread = ::platform::get_platform_services().get_current_cpu().running_thread.take().unwrap();
+        let curr_thread = ::platform::get_platform_services().get_current_cpu().take_running_thread();
 
         let new_thread = self.schedule_new();
 
@@ -224,7 +225,7 @@ impl Sched {
 
         let (old, current) = platform::switch_context(Some(curr_thread), new_thread);
 
-        ::platform::get_platform_services().get_current_cpu().running_thread = Some(current);
+        ::platform::get_platform_services().get_current_cpu().set_running_thread(current);
 
         if let Some(old) = old {
             let simpl = self.sched_impl.borrow();
@@ -254,17 +255,23 @@ impl Sched {
         //TODO how to release cpu guard after the context was saved?!
         let ig = platform::intr::no_interrupts();
 
-        let cur_thread = platform::get_platform_services().get_current_cpu().running_thread.as_mut().unwrap();
-        cur_thread.wake_on = {
-            self.sched_impl.borrow().time_since_boot_millies + (millis as u64)
-        };
-        cur_thread.ready = false;
-        
+        {
+            let mut curthread_cell = platform::get_platform_services().get_current_cpu().get_running_thread().borrow_mut();
+            let mut cur_thread = curthread_cell.as_mut().unwrap();
+
+            cur_thread.wake_on = {
+                self.sched_impl.borrow().time_since_boot_millies + (millis as u64)
+            };
+            cur_thread.ready = false;
+        }
+
         self.yeild_thread_no_intr()
     }
 
     pub fn unschedule_no_intr(&self) {
-        let t = platform::get_platform_services().get_current_cpu().running_thread.as_mut().unwrap();
+
+        let mut curthread_cell = platform::get_platform_services().get_current_cpu().get_running_thread().borrow_mut();
+        let mut t = curthread_cell.as_mut().unwrap();
         t.ready = false;
         if t.wake_on == 0 {
             t.wake_on = WAKE_NEVER;
@@ -293,10 +300,14 @@ impl Sched {
             t.ready = true;
             break;
         }
+        // TODO: if we have other CPUs sleeping wake them up with an IPI...
     }
 
     pub fn get_current_thread(&self) -> ThreadId {
-        platform::get_platform_services().get_current_cpu().running_thread.as_mut().unwrap().id
+
+        let curthread_cell = platform::get_platform_services().get_current_cpu().get_running_thread().borrow();
+        let cur_thread = curthread_cell.as_ref().unwrap();
+        cur_thread.id
     }
 
     // TODO

@@ -60,7 +60,7 @@ impl PlatformServices {
         &get_platform_services().scheduler
     }
 
-    pub fn get_current_cpu(&self) -> &mut ::cpu::CPU {
-        &mut self.cpus[get_current_cpu_id()]
+    pub fn get_current_cpu(&self) -> &::cpu::CPU {
+        & self.cpus[get_current_cpu_id()]
     }
 }
