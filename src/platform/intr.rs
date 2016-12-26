@@ -6,7 +6,7 @@ use super::get_interrupts;
 use super::set_interrupts;
 
 pub fn enable_interrupts() {
-    set_interrupts(false);
+    set_interrupts(true);
 }
 
 pub fn no_interrupts() -> InterruptGuardOneShot {
