@@ -16,13 +16,9 @@ const WAKE_NEVER: u64 = 0xFFFFFFFF_FFFFFFFF;
 // TODO: make this Thread and SMP safe.
 // TODO this is the one mega unsafe class, so it needs to take care of it's on safety.
 pub struct Sched {
-    sched_impl : RefCell<SchedImpl>,
-}
-
-struct SchedImpl {
     threads: sync::CpuMutex<Vec<Box<thread::Thread>>>,
     thread_id_counter: atomic::AtomicUsize,
-    time_since_boot_millies: u64,
+    time_since_boot_millies: RefCell<u64>,
 }
 
 const IDLE_THREAD_ID: ThreadId = ThreadId(0);
@@ -32,12 +28,10 @@ pub const MAIN_THREAD_ID: ThreadId = ThreadId(1);
 impl Sched {
     pub fn new() -> Sched {
         Sched {
-        sched_impl : RefCell::new(SchedImpl {
             // fake thread as this main thread..
             threads: sync::CpuMutex::new(vec![]),
             thread_id_counter : atomic::AtomicUsize::new(10),
-            time_since_boot_millies : 0,
-        })
+            time_since_boot_millies : RefCell::new(0),
         }
     }
 
@@ -45,8 +39,7 @@ impl Sched {
         let mut idle = Self::new_thread_obj(IDLE_THREAD_ID, platform::wait_for_interrupts );
         idle.cpu_affinity = Some(platform::get_current_cpu_id());
         idle.priority = 0;
-        let simpl = self.sched_impl.borrow_mut();
-        simpl.threads.lock().push(idle);
+        self.threads.lock().push(idle);
     }
 
 // TODO move start to thread object.
@@ -59,8 +52,7 @@ impl Sched {
         ::platform::get_platform_services().get_current_cpu().set_running_thread(new_thread);
 
         if let Some(old) = old_thread {
-            let simpl = platform::get_platform_services().get_scheduler().sched_impl.borrow();
-            let mut threads = simpl.threads.lock();
+            let mut threads = platform::get_platform_services().get_scheduler().threads.lock();
             threads.push(old);
         }
 
@@ -85,13 +77,12 @@ impl Sched {
         where F: FnOnce(),
               F: Send + 'static {
         // TODO thread safety and SMP Support
-        let simpl = self.sched_impl.borrow();
-        let tid = simpl.thread_id_counter.fetch_add(1, atomic::Ordering::SeqCst);
+        let tid = self.thread_id_counter.fetch_add(1, atomic::Ordering::SeqCst);
 
         let t = Self::new_thread_obj(ThreadId(tid), f);
 
         let ig = platform::intr::no_interrupts();
-        simpl.threads.lock().push(t);
+        self.threads.lock().push(t);
     }
 
     fn can_current_continue(&self) -> bool {
@@ -102,8 +93,7 @@ impl Sched {
             return false;
         }
                 
-        let simpl = self.sched_impl.borrow();
-        let threads = simpl.threads.lock();
+        let threads = self.threads.lock();
         
         // is there one other thread that can run?
         threads.iter().filter(|&t| t.ready == true).filter(|&t| (t.cpu_affinity == None) || (t.cpu_affinity == Some(platform::get_current_cpu_id()))).
@@ -113,8 +103,7 @@ impl Sched {
     fn schedule_new(&self) -> Box<::thread::Thread> {
         // find an eligble thread
         // threads.map()
-        let simpl = self.sched_impl.borrow();
-        let mut threads = simpl.threads.lock();
+        let mut threads = self.threads.lock();
 /*
         // wake up a sleeping threads
         for sleepingt in threads
@@ -126,6 +115,7 @@ impl Sched {
         }
 */
         let num_threads = threads.len();
+        let time_since_boot_millies = *self.time_since_boot_millies.borrow();
 
         for i in 0..num_threads {
             let chosen = {
@@ -139,7 +129,6 @@ impl Sched {
                 }
 
                 {
-                    let time_since_boot_millies = simpl.time_since_boot_millies;
                     if (cur_thread.wake_on != WAKE_NEVER) &&
                     (cur_thread.wake_on >= time_since_boot_millies) {
                         cur_thread.wake_on = 0;
@@ -225,8 +214,7 @@ impl Sched {
         ::platform::get_platform_services().get_current_cpu().set_running_thread(current);
 
         if let Some(old) = old {
-            let simpl = self.sched_impl.borrow();
-            let mut threads = simpl.threads.lock();
+            let mut threads = self.threads.lock();
             threads.push(old);
         }
 
@@ -257,7 +245,7 @@ impl Sched {
             let mut cur_thread = curthread_cell.as_mut().unwrap();
 
             cur_thread.wake_on = {
-                self.sched_impl.borrow().time_since_boot_millies + (millis as u64)
+                *self.time_since_boot_millies.borrow() + (millis as u64)
             };
             cur_thread.ready = false;
         }
@@ -289,8 +277,7 @@ impl Sched {
 
     // assume interrupts are blocked
     pub fn wakeup_no_intr(&self, tid: ThreadId) {
-        let simpl = self.sched_impl.borrow();
-        let mut threads = simpl.threads.lock();
+        let mut threads = self.threads.lock();
         for t in threads.iter_mut().filter(|x| x.id == tid) {
             // there can only be one..
             t.wake_on = 0;
@@ -334,9 +321,8 @@ impl platform::InterruptSource for Sched {
     fn interrupted(&self, ctx: &mut platform::Context) {
         const DELTA_MILLIS: u64= (1000 / platform::ticks_in_second) as u64;
         {
-            let simpl = self.sched_impl.borrow();
             // TODO fix time_since_boot_millies to be in cell?!
-            // simpl.time_since_boot_millies +=  DELTA_MILLIS;
+            *self.time_since_boot_millies.borrow_mut() +=  DELTA_MILLIS;
         }
         // TODO: change to yeild? - we need yield to mark the unscheduled 
         // thread as unscheduled.. so it can continue to run on other cpus.. 
