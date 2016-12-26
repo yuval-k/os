@@ -26,7 +26,7 @@ struct SchedImpl {
 }
 
 const IDLE_THREAD_ID: ThreadId = ThreadId(0);
-const MAIN_THREAD_ID: ThreadId = ThreadId(1);
+pub const MAIN_THREAD_ID: ThreadId = ThreadId(1);
 
 
 impl Sched {
@@ -34,10 +34,7 @@ impl Sched {
         Sched {
         sched_impl : RefCell::new(SchedImpl {
             // fake thread as this main thread..
-            threads: sync::CpuMutex::new(vec![Box::new(
-                thread::Thread::new_cur_thread(MAIN_THREAD_ID)
-                )
-                ]),
+            threads: sync::CpuMutex::new(vec![]),
             thread_id_counter : atomic::AtomicUsize::new(10),
             time_since_boot_millies : 0,
         })

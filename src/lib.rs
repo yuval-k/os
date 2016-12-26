@@ -74,6 +74,9 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
         platform::set_platform_services(p_s);
     }
 
+    // set current thread
+    platform::get_platform_services().get_current_cpu().set_running_thread(Box::new(thread::Thread::new_cur_thread(sched::MAIN_THREAD_ID)));
+
     platform::get_mut_platform_services().scheduler.add_idle_thread_for_cpu();
 
     // TODO add the sched interrupt back, to be explicit
