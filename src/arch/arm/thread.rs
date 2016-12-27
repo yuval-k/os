@@ -115,7 +115,7 @@ extern "C" fn new_thread_trampoline1() {
 
     unsafe {
         asm!("
-        /* r0 and r1 contain new and old thread respectivly*/
+        /* r0 and r1 contain old and new thread respectivly*/
           b new_thread_trampoline2
           "::
         :  : "volatile")

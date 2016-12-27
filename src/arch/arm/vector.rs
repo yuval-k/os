@@ -52,10 +52,14 @@ extern "C" fn vector_with_context(ctx : &InterruptContext) {
     // restore everything - returns interrupted code.
     unsafe{
     asm!("mov r0, $0
-        /* r0 has InterruptContext */
+        /* r0 has InterruptContext. sub 4 so 'pop' will work */
+        sub r0, r0, 4
         /* pop things in reverse order than in vector_entry */
+        /* seems that using sp in ldmia is deprecated so we use ldr...  http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0204j/Cihcadda.html */
         ldr sp, [r0, #4]!
         ldr lr, [r0, #4]!
+        /* can use ldmia from now on..*/
+        add r0, r0, 4
         /* load spsr */
         ldmia r0!, {r1}
         mrs r1, spsr
@@ -117,6 +121,7 @@ extern "C" fn vector_entry() -> !{
           /* save original lr and sp */
           str lr, [r0, #-4]!
           str sp, [r0, #-4]!
+
 
           /* set to supervisor mode */
           mov r1, $3
