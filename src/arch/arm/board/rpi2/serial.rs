@@ -12,9 +12,6 @@ pub struct Writer {
     base: *mut u8,
 }
 
-const SERIAL_FLAG_REGISTER: usize = 0x18;
-const SERIAL_BUFFER_FULL: u32 = (1 << 5);
-
 impl Writer {
     pub fn new(base: ::mem::VirtualAddress) -> Self {
         Writer { base: base.0 as *mut u8 }

@@ -3,7 +3,6 @@
 
 use ::arch::arm::cpu;
 use ::arch::arm::mem;
-use core;
 
 extern "C" {
     fn stub_begin_glue() -> *const usize;

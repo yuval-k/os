@@ -3,20 +3,14 @@ pub mod serial;
 pub mod stub;
 
 use core;
-use core::ops;
 use core::sync::atomic;
 use core::intrinsics::{volatile_load, volatile_store};
 
 use super::super::mem;
-use super::super::vector;
 use rlibc;
-
-use collections::boxed::Box;
-use alloc::rc::Rc;
 
 use mem::MemoryMapper;
 use mem::PVMapper;
-use platform;
 
 use device::serial::SerialMMIO;
 
@@ -48,16 +42,19 @@ const ARM_LOCAL_PEND: ::mem::PhysicalAddress = ::mem::PhysicalAddress(ARM_LOCAL_
 const ARM_LOCAL_VSTART: ::mem::VirtualAddress = ::mem::VirtualAddress(MMIO_VSTART.0 + MMIO_SIZE);
 
 
+
+pub enum Ptr {}
+
 extern "C" {
-    static _stub_begin : *const ();
-    static _stub_end : *const ();
-    static _kernel_start_phy : *const ();
-    static _kernel_start_virt : *const ();
-    static _kernel_end_virt : *const ();
-    static stub_l1pagetable : *const ();
-    static stub_l2pagetable : *const ();
-    static __bss_start : *const ();
-    static __bss_end : *const ();
+    static _stub_begin : *const Ptr;
+    static _stub_end : *const Ptr;
+    static _kernel_start_phy : *const Ptr;
+    static _kernel_start_virt : *const Ptr;
+    static _kernel_end_virt : *const Ptr;
+    static stub_l1pagetable : *const Ptr;
+    static stub_l2pagetable : *const Ptr;
+    static __bss_start : *const Ptr;
+    static __bss_end : *const Ptr;
     
 }
 
@@ -106,8 +103,8 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
                                   -> ! {
 
     // first thing - zero out the bss
-    let bss_start = &__bss_start as *const*const () as *mut u8;
-    let bss_end = &__bss_end as *const*const () as *mut u8;
+    let bss_start =  &__bss_start as *const*const Ptr as *mut u8;
+    let bss_end = &__bss_end as *const*const Ptr as *mut u8;
 
     unsafe { rlibc::memset(bss_start, 0, (bss_end as usize) - (bss_start as usize))};
 
@@ -122,8 +119,8 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
 
     let kernel_size = kernel_end_virt - kernel_start_virt;
 
-    let s_begin = &_stub_begin as *const*const () as usize;
-    let s_end = &_stub_end as *const*const () as usize;
+    let s_begin = &_stub_begin as *const*const Ptr as usize;
+    let s_end = &_stub_end as *const*const Ptr as usize;
 
     // TODO: add stub to skip ranges
     let skip_ranges = [down(kernel_start_phy)..up(kernel_start_phy + kernel_size),
@@ -135,7 +132,7 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
 
 
     // TODO support sending IPIs to other CPUs when page mapping changes so they can flush tlbs.
-    let mut page_table = mem::init_page_table(::mem::VirtualAddress(l1table_id),
+    let page_table = mem::init_page_table(::mem::VirtualAddress(l1table_id),
                                               ::mem::VirtualAddress(l2table_space_id),
                                               &ml,
                                               &mut frame_allocator);
@@ -160,8 +157,6 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
     write_to_console("Welcome home!");
 
     ::arch::arm::arm_main(page_table, frame_allocator);
-
-    loop {}
 }
 
 static mut serial_base: ::mem::VirtualAddress = ::mem::VirtualAddress(0);
@@ -172,6 +167,7 @@ pub fn write_to_console(s: &str) {
 
 pub struct PlatformServices {
 //    pic : Box<pic::PIC>
+    mailboxes : mailbox::LocalMailbox
 }
 extern {
     fn _secondary_start () -> !;
@@ -246,7 +242,20 @@ pub fn init_board() -> PlatformServices {
 
     PlatformServices{
     //    pic: pic_
+        mailboxes : mailboxes
     }
+}
+
+pub fn send_ipi(id : usize, ipi : ::cpu::IPI) {
+    let mailboxes = & ::platform::get_platform_services().arch_services.as_ref().unwrap().board_services.mailboxes;
+    mailboxes.mailboxes[id].set_high(0, 1 <<  (ipi as usize));
+}
+
+
+fn clear_ipi(ipi : ::cpu::IPI) {
+    let id = ::platform::get_platform_services().get_current_cpu().id();
+    let mailboxes = & ::platform::get_platform_services().arch_services.as_ref().unwrap().board_services.mailboxes;
+    mailboxes.mailboxes[id].set_low(0, 1 << (ipi as usize));
 }
 
 

@@ -17,7 +17,7 @@ pub const PAGE_MASK: usize = PAGE_SIZE - 1;
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct ThreadId(pub usize);
 
-pub trait InterruptSource {
+pub trait Interruptable {
     // must be safe for concurrent calls.
     fn interrupted(&self, &mut Context);
 }

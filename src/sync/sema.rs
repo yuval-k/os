@@ -36,7 +36,7 @@ impl Semaphore {
         // add to counter
         // protect with spin lock:
         // call scheduler to wake up potential sleeping threads
-        let mut ret : bool;
+        let ret : bool;
         {
         // make the cpu lock as short as possible.
         // we can't place a cpu mutex on block 

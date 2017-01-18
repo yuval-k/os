@@ -143,6 +143,7 @@ impl MemoryManagaer for DefaultMemoryManagaer {
            v: VirtualAddress,
            size: MemorySize)
            -> Result<(), ()> {
+        // TODO: add IPI
         self.mem_mapper.map(self.frame_allocator.as_ref(), p, v, size)
     }
 
@@ -150,7 +151,7 @@ impl MemoryManagaer for DefaultMemoryManagaer {
              v: VirtualAddress,
              size: MemorySize)
              -> Result<(), ()> {
-        // TODO change to result physical address
+        // TODO: add IPI
         self.mem_mapper.unmap(self.frame_allocator.as_ref(), v, size)
     }
 
@@ -159,6 +160,7 @@ impl MemoryManagaer for DefaultMemoryManagaer {
                   v: VirtualAddress,
                   size: MemorySize)
                   -> Result<(), ()> {
+        // TODO: add IPI
         self.mem_mapper.map_device(self.frame_allocator.as_ref(), p, v, size)
     }
 }

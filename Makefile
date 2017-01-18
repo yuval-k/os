@@ -7,7 +7,7 @@ BOARD=integrator
 ifeq ($(BOARD),rpi2)
 TARGET ?= armv7-unknown-linux-gnueabihf
 MACHINE=raspi2
-QEMU=docker run -t -i --net host --rm -v $(shell pwd):$(shell pwd):ro --workdir $(shell pwd) qemu-rpi qemu-system-arm
+QEMU=docker run -t -i -p 1234:1234 --rm -v $(shell pwd):$(shell pwd):ro --workdir $(shell pwd) qemu-rpi qemu-system-arm
 RUSTCFLAGS=
 endif
 

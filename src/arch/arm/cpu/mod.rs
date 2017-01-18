@@ -28,10 +28,12 @@ pub const DISABLE_IRQ: u32 = 1 << 7;
 #[inline(always)]
 pub fn memory_write_barrier() {
     data_memory_barrier();
+    data_synchronization_barrier();
 }
 #[inline(always)]
 pub fn memory_read_barrier() {
     data_memory_barrier();
+    data_synchronization_barrier();
 }
 
 #[inline(always)]

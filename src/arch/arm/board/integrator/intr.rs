@@ -1,6 +1,8 @@
 use core::intrinsics::{volatile_load, volatile_store};
+use core::ops::Range;
 use collections::boxed::Box;
 use platform;
+use super::super::super::pic;
 
 // section 3.6 in: http://infocenter.arm.com/help/topic/com.arm.doc.dui0159b/DUI0159B_integratorcp_1_0_ug.pdf
 pub const PIC_BASE_PADDR: ::mem::PhysicalAddress = ::mem::PhysicalAddress(0x1400_0000);
@@ -41,7 +43,39 @@ bitflags! {
 
 pub struct PIC {
     vbase: ::mem::VirtualAddress,
-    callback: Option<Box<platform::InterruptSource>>,
+    callback: Option<Box<platform::Interruptable>>,
+}
+
+impl pic::InterruptSource for PIC {
+    fn iter(&self) -> Range<usize> {
+         (0..29)
+    }
+
+    fn enable(&self, interrupt : usize) {
+        let flags : PicFlags = PicFlags::from_bits_truncate(1<<interrupt);
+        self.enable_interrupts(flags);
+    }
+
+    fn disable(&self, interrupt : usize) {
+        let flags : PicFlags = PicFlags::from_bits_truncate(1<<interrupt);
+        self.clear_interrupts(flags);
+    }
+    
+    fn is_interrupted(&self, interrupt : usize) -> bool {
+        let flags : PicFlags = PicFlags::from_bits_truncate(1<<interrupt);
+        let status = self.interrupt_status();
+
+        status.contains(flags)
+    }
+    
+    fn interrupted(&self, interrupt : usize, ctx: &mut platform::Context) {
+        let flags : PicFlags = PicFlags::from_bits_truncate(1<<interrupt);
+
+        match flags {
+            TIMERINT1 => self.timer_interrupted(ctx),
+            _ => panic!("unexpected interrupt")
+        };
+    }
 }
 
 impl PIC {
@@ -52,18 +86,24 @@ impl PIC {
         }
     }
 
-    pub fn add_timer_callback(&mut self, callback: Box<platform::InterruptSource>) {
+    pub fn timer_interrupted(&self, ctx: &mut platform::Context) {
+         if let Some(ref callback) = self.callback {
+                callback.interrupted(ctx);
+            }
+    }
+
+    pub fn add_timer_callback(&mut self, callback: Box<platform::Interruptable>) {
         self.callback = Some(callback);
     }
 
-    pub fn enable_interrupts(&mut self, flags: PicFlags) {
+    pub fn enable_interrupts(&self, flags: PicFlags) {
         let ptr: *mut u32 = self.vbase.uoffset(PIC_IRQ_ENABLESET_OFFSET).0 as *mut u32;
         unsafe {
             volatile_store(ptr, flags.bits);
         }
     }
 
-    pub fn clear_interrupts(&mut self, flags: PicFlags) {
+    pub fn clear_interrupts(&self, flags: PicFlags) {
         let ptr: *mut u32 = self.vbase.uoffset(PIC_IRQ_ENABLECLR_OFFSET).0 as *mut u32;
         unsafe {
             volatile_store(ptr, flags.bits);
@@ -76,23 +116,5 @@ impl PIC {
         flags.bits = unsafe { volatile_load(ptr) };
 
         flags
-    }
-}
-
-impl platform::InterruptSource for PIC {
-    fn interrupted(&self, ctx: &mut platform::Context) {
-        let status = self.interrupt_status();
-
-        if status.contains(TIMERINT1) {
-            if let Some(ref callback) = self.callback {
-                callback.interrupted(ctx);
-            }
-        }
-
-        // TODO switch back to main thread to deal with this...
-        // let it know what interrupt happened
-        // once we have semaphores or some other way of sync objects.
-
-
     }
 }

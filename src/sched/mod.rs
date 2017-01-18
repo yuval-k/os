@@ -316,7 +316,7 @@ fn handle_interrupts() {
 
 // for the timer interrupt..
 // TODO: delete..
-impl platform::InterruptSource for Sched {
+impl platform::Interruptable for Sched {
     // this method is called platform::ticks_in_second times a second
     fn interrupted(&self, ctx: &mut platform::Context) {
         const DELTA_MILLIS: u64= (1000 / platform::ticks_in_second) as u64;

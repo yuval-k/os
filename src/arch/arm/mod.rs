@@ -6,6 +6,7 @@ pub mod vector;
 pub mod mem;
 pub mod cpu;
 pub mod thread;
+pub mod pic;
 
 
 use platform;
@@ -15,6 +16,8 @@ use ::mem::MemoryMapper;
 pub use self::board::write_to_console;
 
 pub use self::board::ticks_in_second;
+
+pub use self::board::send_ipi;
 
 
 pub fn build_mode_stacks(mapper: &mut ::mem::MemoryMapper,

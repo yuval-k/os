@@ -1,11 +1,12 @@
 pub mod serial;
-pub mod pic;
+pub mod intr;
 pub mod timer;
 pub mod stub;
 
 use core::ops;
 use super::super::mem;
 use super::super::vector;
+use super::super::pic;
 
 use collections::boxed::Box;
 use alloc::rc::Rc;
@@ -89,14 +90,17 @@ pub struct PlatformServices {
   //  pic : Box<pic::PIC>
 }
 
+pub fn send_ipi(id : usize, ipi : ::cpu::IPI) {
+    panic!("no ipi support in integrator.")
+}
 
 
-// This function should be called when we have a heap and a scheduler.
+// This function will be called when we have a heap and a scheduler.
 pub fn init_board() -> PlatformServices {
 
     let mapper = &::platform::get_platform_services().mem_manager;
 
-    let mut pic_ = Box::new(pic::PIC::new(mapper.p2v(pic::PIC_BASE_PADDR).unwrap()));
+    let mut interrupt_source = Box::new(intr::PIC::new(mapper.p2v(intr::PIC_BASE_PADDR).unwrap()));
 
 
     // start a timer
@@ -108,12 +112,15 @@ pub fn init_board() -> PlatformServices {
     tmr.start_timer(counter, true);
 
 
-    pic_.add_timer_callback(tmr);
-    
-    pic_.enable_interrupts(pic::TIMERINT1);
+    interrupt_source.add_timer_callback(tmr);
+    interrupt_source.enable_interrupts(intr::TIMERINT1);
 
+    let mut pic = Box::new(pic::PIC::new());
+    pic.add_source(interrupt_source);
     // TODO not move the pic to the vector table.
-    vector::get_vec_table().set_irq_callback(pic_);
+    // as we will need to call it from other places to
+    // disable interrupts - perhaps add it to local cpu as well?
+    vector::get_vec_table().set_irq_callback(pic);
 
     PlatformServices{
       //  pic: pic_

@@ -9,6 +9,12 @@ pub struct CPU {
     id : usize,
 }
 
+#[derive(Clone, Copy)]
+pub enum IPI {
+    MEM_CHANGED,
+    SCHED_CHANGED,
+}
+
 impl CPU {
     pub fn new(id : usize) -> Self {
         CPU {
@@ -16,6 +22,31 @@ impl CPU {
             id : id
         }
     }
+
+    pub fn id(&self) -> usize {
+        self.id
+    }
+    
+    pub fn send_ipi_to_others(&self, ipi : IPI) {
+                    
+        let cpus = & ::platform::get_platform_services().cpus;
+        for cpu in cpus.iter().filter(|x| x.id != self.id){
+            cpu.interrupt(ipi);
+        }
+    }
+
+    pub fn interrupt(&self, ipi : IPI) {
+        ::platform::send_ipi(self.id, ipi);
+    }
+
+    pub fn interrupted(&self, ipi : IPI) {
+        match ipi {
+            MEM_CHANGED => ::platform::invalidate_tlb(),
+            // SCHED_CHANGED => if on idle thread - yeild();
+        }
+        
+    }
+    
 
     pub fn take_running_thread(&self) -> Box<::thread::Thread> {
         if self.id != ::platform::get_current_cpu_id() {

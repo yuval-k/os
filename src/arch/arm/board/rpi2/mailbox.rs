@@ -8,6 +8,7 @@ pub const MBOX_STATUS_OFFSET :usize = 0x18;
 pub const MAILBOX_FULL: u32 = 0x80000000;
 pub const MAILBOX_EMPTY: u32 = 0x80000000;
 
+/* VC core mailbox tocome..
 pub struct Mailbox {
     base: *mut u8,
 }
@@ -45,7 +46,7 @@ impl Mailbox {
     }
 }
 
-
+*/
 
 pub struct LocalMailbox {
     pub mailboxes: [CpuLocalMailbox; 4],
