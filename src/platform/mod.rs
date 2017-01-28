@@ -11,6 +11,7 @@ mod arm;
 #[cfg(target_arch = "arm")]
 pub use self::arm::*;
 
+
 pub const PAGE_SIZE: usize = 1 << PAGE_SHIFT;
 pub const PAGE_MASK: usize = PAGE_SIZE - 1;
 
@@ -29,6 +30,7 @@ pub struct PlatformServices {
     pub frame_alloc: Rc<::mem::FrameAllocator>,
     pub arch_services: Option<ArchPlatformServices>,
     pub cpus : Vec<::cpu::CPU>,
+
 }
 
 static mut platform_services: Option<UnsafeCell<PlatformServices>> = None;
@@ -41,7 +43,7 @@ pub fn get_platform_services() -> &'static PlatformServices {
     unsafe {
         match platform_services {
             Some(ref x) => &*x.get(),
-            None => panic!(),
+            None => panic!("platform services are note INITIALIZED!"),
         }
     }
 }
@@ -63,4 +65,18 @@ impl PlatformServices {
     pub fn get_current_cpu(&self) -> &::cpu::CPU {
         & self.cpus[get_current_cpu_id()]
     }
+
+    pub fn clock(&self) {
+        // TODO: move to scheduler to decide
+        self.get_current_cpu().should_resched.set(true);
+    }
+
+    // called with interrupts disabled..
+    pub fn post_interrupted(&self, ctx : &mut Context) {
+        if self.get_current_cpu().should_resched.get() {
+            self.get_current_cpu().should_resched.set(false);
+            self.scheduler.yeild_thread_no_intr();
+        }
+    }
+    
 }

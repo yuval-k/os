@@ -27,7 +27,9 @@ pub const DISABLE_IRQ: u32 = 1 << 7;
 
 #[inline(always)]
 pub fn memory_write_barrier() {
+    // take cafre o memory ordering 
     data_memory_barrier();
+    // make sure data was written to memory
     data_synchronization_barrier();
 }
 #[inline(always)]
@@ -62,8 +64,16 @@ pub fn set_ttb0(page_table: *const ()) {
     unsafe {
         asm!("mcr p15, 0, $0, c2, c0, 0"
           :: "r"(page_table as u32) :: "volatile");
-
     }
+}
+
+#[inline(always)]
+pub fn get_ttb0() -> *const () {
+    let mut ttb0: u32;
+    unsafe {
+        asm!("mcr p15, 0, $0, c2, c0, 0":  "=r"(ttb0));
+    }
+    return ttb0 as *const ();
 }
 
 #[inline(always)]

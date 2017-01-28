@@ -1,12 +1,14 @@
 use collections::boxed::Box;
 use core::cell::RefCell;
 use core::mem;
+use core::cell::Cell;
 
 pub struct CPU {
     // no need to lock this, as it should only be modified
     // from the same CPU and with no interrupts
     running_thread : RefCell<Option<Box<::thread::Thread>>>,
     id : usize,
+    pub should_resched : Cell<bool>,
 }
 
 #[derive(Clone, Copy)]
@@ -19,7 +21,8 @@ impl CPU {
     pub fn new(id : usize) -> Self {
         CPU {
             running_thread: RefCell::new(None),
-            id : id
+            id : id,
+            should_resched : Cell::new(false),
         }
     }
 

@@ -33,6 +33,7 @@ pub mod cpu;
 
 
 use collections::boxed::Box;
+use collections::Vec;
 use alloc::rc::Rc;
 use alloc::arc::Arc;
 
@@ -57,6 +58,12 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
 
     // we can box stuff!
     // init scheduler
+
+    let mut cpus : Vec<cpu::CPU> = Vec::new();
+    for i in 0..platform::get_num_cpus() {
+        cpus.push(cpu::CPU::new(i));
+    }
+
     let farc = Rc::new(frame_allocator);
     let p_s = platform::PlatformServices {
             scheduler: sched::Sched::new(),
@@ -68,7 +75,7 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
             ), 
             frame_alloc: farc.clone(),
             arch_services: None,
-            cpus : vec![::cpu::CPU::new(platform::get_current_cpu_id())]
+            cpus : cpus,
         };
     unsafe{
         platform::set_platform_services(p_s);

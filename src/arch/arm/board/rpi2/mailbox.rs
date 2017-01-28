@@ -64,8 +64,6 @@ impl LocalMailbox {
                         CpuLocalMailbox::new(base.uoffset(0x10*3))],
         }
     }
-    
-
 }
 
 pub struct CpuLocalMailbox {

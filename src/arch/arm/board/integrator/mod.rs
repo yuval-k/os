@@ -10,7 +10,9 @@ use super::super::pic;
 
 use collections::boxed::Box;
 use alloc::rc::Rc;
+use arch::arm::pic::InterruptSource;
 
+use mem::FrameAllocator;
 use mem::MemoryMapper;
 use mem::PVMapper;
 use platform;
@@ -18,6 +20,8 @@ use platform;
 use device::serial::SerialMMIO;
 
 pub const ticks_in_second : usize = 20;
+
+pub const NUM_CPUS : usize = 1;
 
 fn up(a: usize) -> ::mem::PhysicalAddress {
     ::mem::PhysicalAddress((a + mem::PAGE_MASK) & (!mem::PAGE_MASK))
@@ -52,9 +56,12 @@ pub extern "C" fn integrator_main(sp_end_virt: usize,
 
     let kernel_size = kernel_end_virt - kernel_start_virt;
 
+    let pagetable_start = down(l1table_id);
+    let pagetable_end = up(l2table_space_id + 4 * mem::L2TABLE_ENTRIES);
+
     let skip_ranges = [down(kernel_start_phy)..up(kernel_start_phy + kernel_size),
                        down(ml.stack_phy.0)..up(sp_end_phy),
-                       down(l1table_id)..up(l2table_space_id + 4 * mem::L2TABLE_ENTRIES)];
+                       pagetable_start..pagetable_end];
 
     let mut frame_allocator =
         mem::LameFrameAllocator::new(&skip_ranges, 1 << 27);
@@ -63,7 +70,7 @@ pub extern "C" fn integrator_main(sp_end_virt: usize,
                                               ::mem::VirtualAddress(l2table_space_id),
                                               &ml,
                                               &mut frame_allocator);
-
+    frame_allocator.deallocate( pagetable_start, ::mem::to_pages(pagetable_end-pagetable_start).expect("misaligned pages!"));
     // map all the gpio
     page_table.map_device(&mut frame_allocator,
                     MMIO_PSTART,
@@ -105,18 +112,19 @@ pub fn init_board() -> PlatformServices {
 
     // start a timer
     let mut tmr =
-        Box::new(timer::Timer::new(1, mapper.p2v(timer::TIMERS_BASE).unwrap(), &::platform::get_platform_services().scheduler));
+        Box::new(timer::Timer::new(1, mapper.p2v(timer::TIMERS_BASE).unwrap(), Box::new(move||{::platform::get_platform_services().clock()})));
 
     // timer 1 is 1mhz
     let counter = 1_000_000 / (ticks_in_second as u32);
     tmr.start_timer(counter, true);
 
 
-    interrupt_source.add_timer_callback(tmr);
-    interrupt_source.enable_interrupts(intr::TIMERINT1);
+    interrupt_source.enable(intr::Interrupts::TIMERINT1 as usize);
 
     let mut pic = Box::new(pic::PIC::new());
-    pic.add_source(interrupt_source);
+    let handle = pic.add_source(interrupt_source);
+    pic.register_callback_on_intr(handle, intr::Interrupts::TIMERINT1 as usize, tmr);
+
     // TODO not move the pic to the vector table.
     // as we will need to call it from other places to
     // disable interrupts - perhaps add it to local cpu as well?

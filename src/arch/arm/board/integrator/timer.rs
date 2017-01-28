@@ -1,6 +1,7 @@
 use core::intrinsics::volatile_store;
 use platform;
 use alloc::rc::Rc;
+use collections::boxed::Box;
 
 // section 4.9.2 in: http://infocenter.arm.com/help/topic/com.arm.doc.dui0159b/DUI0159B_integratorcp_1_0_ug.pdf
 
@@ -30,14 +31,14 @@ bitflags! {
 
 pub struct Timer {
     base: ::mem::VirtualAddress, // this should be mapped to TIMERS_BASE
-    callback: &'static platform::Interruptable,
+    callback:  Box<Fn()>,
 }
 
 
 impl Timer {
-    pub fn new(index: usize,
-               timerbase: ::mem::VirtualAddress,
-               callback: &'static platform::Interruptable)
+    pub fn new( index: usize,
+                timerbase: ::mem::VirtualAddress,
+                callback: Box<Fn()>)
                -> Timer {
         Timer {
             base: timerbase.uoffset(index * TIMER_BASE_OFFSET),
@@ -64,7 +65,7 @@ impl Timer {
 impl platform::Interruptable for Timer {
     fn interrupted(&self, ctx: &mut platform::Context) {
         self.clear_interrupt();
-        self.callback.interrupted(ctx);
+        (self.callback)();
     }
 }
 

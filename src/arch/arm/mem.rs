@@ -317,8 +317,8 @@ pub struct MemLayout {
 
 fn get_init_frames(fa: & ::mem::FrameAllocator) -> [::mem::PhysicalAddress; 5] {
     const NUM_FRAMES: usize = 7; // guaranteed to have somthing aligned here..
-    let mut free_frames: [::mem::PhysicalAddress; 7] = [::mem::PhysicalAddress(0); NUM_FRAMES];
-    let pa = fa.allocate(free_frames.len()).unwrap();
+    let mut free_frames: [::mem::PhysicalAddress; NUM_FRAMES] = [::mem::PhysicalAddress(0); NUM_FRAMES];
+    let pa = fa.allocate(NUM_FRAMES).unwrap();
 
     // find out which one devides with 16k
     let l1_start_frame = (4 - ((pa.0 >> PAGE_SHIFT) & 0b11)) & 0b11;

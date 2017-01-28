@@ -1,4 +1,28 @@
 
+#[macro_export]
+macro_rules! read_reg {
+    ($line:expr) => {
+        {
+            let mut ret: u32;
+            unsafe {
+                asm!(concat!("mrc ", $line) :  "=r" (ret));
+            }
+            ret
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! write_reg {
+    ($line:expr, $value:expr) => {
+        {
+            unsafe {
+                asm!(concat!("mcr ", $line) : : "r" ($value):: "volatile");
+            }
+        }
+    };
+}
+
 #[inline(always)]
 pub fn data_memory_barrier() {
     unsafe {
@@ -16,6 +40,13 @@ macro_rules! data_memory_barrier {
 pub fn data_synchronization_barrier() {
     unsafe {
         asm!("dsb":::"memory":"volatile")
+    }
+}
+
+#[inline(always)]
+pub fn instruction_synchronization_barrier() {
+    unsafe {
+        asm!("isb":::"memory":"volatile")
     }
 }
 
@@ -56,3 +87,21 @@ pub fn wait_for_interrupts() {
             )
     }
 }
+
+fn read_cnt_frq() -> u32 { read_reg!("p15,0,$0,c14,c0,0") }
+fn write_cnt_frq(i : u32){write_reg!("p15,0,$0,c14,c0,0", i)}
+
+fn read_cntk_ctl() -> u32 { read_reg!("p15,0,$0,c14,c1,0") }
+fn write_cntk_ctl(i : u32){write_reg!("p15,0,$0,c14,c1,0", i)}
+
+fn read_cntp_tval() -> u32 { read_reg!("p15,0,$0,c14,c2,0") }
+fn write_cntp_tval(i : u32){write_reg!("p15,0,$0,c14,c2,0", i)}
+
+fn read_cntp_ctl() -> u32 { read_reg!("p15,0,$0,c14,c2,1") }
+fn write_cntp_ctl(i : u32){write_reg!("p15,0,$0,c14,c2,1", i)}
+
+fn read_cntv_tval() -> u32 { read_reg!("p15,0,$0,c14,c3,0") }
+fn write_cntv_tval(i : u32){write_reg!("p15,0,$0,c14,c3,0", i)}
+
+fn read_cntv_ctl() -> u32 { read_reg!("p15,0,$0,c14,c3,1") }
+fn write_cntv_ctl(i : u32){write_reg!("p15,0,$0,c14,c3,1", i)}

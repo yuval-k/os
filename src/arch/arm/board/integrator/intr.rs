@@ -1,5 +1,4 @@
 use core::intrinsics::{volatile_load, volatile_store};
-use core::ops::Range;
 use collections::boxed::Box;
 use platform;
 use super::super::super::pic;
@@ -18,26 +17,47 @@ pub const PIC_FIQ_RAWSTAT_OFFSET: usize = 0x24;
 pub const PIC_FIQ_ENABLESET_OFFSET: usize = 0x28;
 pub const PIC_FIQ_ENABLECLR_OFFSET: usize = 0x2C;
 
+pub enum Interrupts {
+    SOFTINT,
+    UARTINT0,
+    UARTINT1,
+    KBDINT,
+    MOUSEINT,
+    TIMERINT0,
+    TIMERINT1,
+    TIMERINT2,
+    RTCINT,
+    LM_LLINT0,
+    LM_LLINT1,
+    CLCDCINT = 22,
+    MMCIINT0,
+    MMCIINT1,
+    AACIINT,
+    CPPLDINT,
+    ETH_INT,
+    TS_PENINT,
+}
+
 bitflags! {
-    pub flags PicFlags: u32 {
-        const SOFTINT       =  1 << 0,
-        const UARTINT0       = 1 << 1,
-        const UARTINT1       = 1 << 2,
-        const KBDINT         = 1 << 3,
-        const MOUSEINT       = 1 << 4,
-        const TIMERINT0      = 1 << 5,
-        const TIMERINT1      = 1 << 6,
-        const TIMERINT2      = 1 << 7,
-        const RTCINT         = 1 << 8,
-        const LM_LLINT0      = 1 << 9,
-        const LM_LLINT1      = 1 << 10,
-        const CLCDCINT       = 1 << 22,
-        const MMCIINT0       = 1 << 23,
-        const MMCIINT1       = 1 << 24,
-        const AACIINT        = 1 << 25,
-        const CPPLDINT       = 1 << 26,
-        const ETH_INT        = 1 << 27,
-        const TS_PENINT      = 1 << 28,
+    flags PicFlags: u32 {
+        const SOFTINT       =  1 << (Interrupts::SOFTINT as usize),
+        const UARTINT0       = 1 << (Interrupts::UARTINT0 as usize),
+        const UARTINT1       = 1 << (Interrupts::UARTINT1 as usize),
+        const KBDINT         = 1 << (Interrupts::KBDINT as usize),
+        const MOUSEINT       = 1 << (Interrupts::MOUSEINT as usize),
+        const TIMERINT0      = 1 << (Interrupts::TIMERINT0 as usize),
+        const TIMERINT1      = 1 << (Interrupts::TIMERINT1 as usize),
+        const TIMERINT2      = 1 << (Interrupts::TIMERINT2 as usize),
+        const RTCINT         = 1 << (Interrupts::RTCINT as usize),
+        const LM_LLINT0      = 1 << (Interrupts::LM_LLINT0 as usize),
+        const LM_LLINT1      = 1 << (Interrupts::LM_LLINT1 as usize),
+        const CLCDCINT       = 1 << (Interrupts::CLCDCINT as usize),
+        const MMCIINT0       = 1 << (Interrupts::MMCIINT0 as usize),
+        const MMCIINT1       = 1 << (Interrupts::MMCIINT1 as usize),
+        const AACIINT        = 1 << (Interrupts::AACIINT as usize),
+        const CPPLDINT       = 1 << (Interrupts::CPPLDINT as usize),
+        const ETH_INT        = 1 << (Interrupts::ETH_INT as usize),
+        const TS_PENINT      = 1 << (Interrupts::TS_PENINT as usize),
     }
 }
 
@@ -47,34 +67,26 @@ pub struct PIC {
 }
 
 impl pic::InterruptSource for PIC {
-    fn iter(&self) -> Range<usize> {
-         (0..29)
+    fn len(&self) -> usize {
+        29
     }
 
-    fn enable(&self, interrupt : usize) {
-        let flags : PicFlags = PicFlags::from_bits_truncate(1<<interrupt);
+    fn enable(&self, interrupt: usize) {
+        // TODO: change to from_bits.unwrap to panic on errors?
+        let flags: PicFlags = PicFlags::from_bits_truncate(1 << interrupt);
         self.enable_interrupts(flags);
     }
 
-    fn disable(&self, interrupt : usize) {
-        let flags : PicFlags = PicFlags::from_bits_truncate(1<<interrupt);
+    fn disable(&self, interrupt: usize) {
+        let flags: PicFlags = PicFlags::from_bits_truncate(1 << interrupt);
         self.clear_interrupts(flags);
     }
-    
-    fn is_interrupted(&self, interrupt : usize) -> bool {
-        let flags : PicFlags = PicFlags::from_bits_truncate(1<<interrupt);
+
+    fn is_interrupted(&self, interrupt: usize) -> bool {
+        let flags: PicFlags = PicFlags::from_bits_truncate(1 << interrupt);
         let status = self.interrupt_status();
 
         status.contains(flags)
-    }
-    
-    fn interrupted(&self, interrupt : usize, ctx: &mut platform::Context) {
-        let flags : PicFlags = PicFlags::from_bits_truncate(1<<interrupt);
-
-        match flags {
-            TIMERINT1 => self.timer_interrupted(ctx),
-            _ => panic!("unexpected interrupt")
-        };
     }
 }
 
@@ -86,31 +98,21 @@ impl PIC {
         }
     }
 
-    pub fn timer_interrupted(&self, ctx: &mut platform::Context) {
-         if let Some(ref callback) = self.callback {
-                callback.interrupted(ctx);
-            }
-    }
-
-    pub fn add_timer_callback(&mut self, callback: Box<platform::Interruptable>) {
-        self.callback = Some(callback);
-    }
-
-    pub fn enable_interrupts(&self, flags: PicFlags) {
+    fn enable_interrupts(&self, flags: PicFlags) {
         let ptr: *mut u32 = self.vbase.uoffset(PIC_IRQ_ENABLESET_OFFSET).0 as *mut u32;
         unsafe {
             volatile_store(ptr, flags.bits);
         }
     }
 
-    pub fn clear_interrupts(&self, flags: PicFlags) {
+    fn clear_interrupts(&self, flags: PicFlags) {
         let ptr: *mut u32 = self.vbase.uoffset(PIC_IRQ_ENABLECLR_OFFSET).0 as *mut u32;
         unsafe {
             volatile_store(ptr, flags.bits);
         }
     }
 
-    pub fn interrupt_status(&self) -> PicFlags {
+    fn interrupt_status(&self) -> PicFlags {
         let mut flags: PicFlags = PicFlags::empty();
         let ptr: *mut u32 = self.vbase.uoffset(PIC_IRQ_STATUS_OFFSET).0 as *mut u32;
         flags.bits = unsafe { volatile_load(ptr) };

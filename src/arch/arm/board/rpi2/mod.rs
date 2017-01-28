@@ -1,12 +1,15 @@
 pub mod mailbox;
 pub mod serial;
 pub mod stub;
+pub mod intr;
+pub mod timer;
 
 use core;
 use core::sync::atomic;
 use core::intrinsics::{volatile_load, volatile_store};
 
 use super::super::mem;
+use super::super::pic;
 use rlibc;
 
 use mem::MemoryMapper;
@@ -19,9 +22,8 @@ pub const NUM_CPUS : usize = 4;
 
 
 static mut current_stack : usize = 0;
+static mut current_page_table: *const () = 0;
 static cpus_awake: atomic::AtomicUsize = atomic::ATOMIC_USIZE_INIT;
-
-static need_stub : atomic::AtomicUsize = atomic::ATOMIC_USIZE_INIT;
 
 fn up(a: usize) -> ::mem::PhysicalAddress {
     ::mem::PhysicalAddress((a + mem::PAGE_MASK) & (!mem::PAGE_MASK))
@@ -130,13 +132,11 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
     let mut frame_allocator =
         mem::LameFrameAllocator::new(&skip_ranges, 1 << 27);
 
-
     // TODO support sending IPIs to other CPUs when page mapping changes so they can flush tlbs.
     let page_table = mem::init_page_table(::mem::VirtualAddress(l1table_id),
                                               ::mem::VirtualAddress(l2table_space_id),
                                               &ml,
                                               &mut frame_allocator);
-     
 
     // map all the gpio
     page_table.map_device(&mut frame_allocator,
@@ -188,8 +188,6 @@ pub fn init_board() -> PlatformServices {
 
     // TODO: by here we shouls assume scheduler is active.
 
-    // the other CPUs still need the stub..
-    need_stub.store(NUM_CPUS-1, atomic::Ordering::SeqCst);
 
     // for 1 .. (cpu-1):
     //    set stack for CPU
@@ -203,6 +201,35 @@ pub fn init_board() -> PlatformServices {
     let base = mem_manager.p2v(ARM_LOCAL_PSTART).unwrap();
         
     let mailboxes = mailbox::LocalMailbox::new();
+    let interrupts = InterHandler::new();
+    let mut pic = Box::new(pic::PIC::new());
+// part of cpu struct?
+
+    // create global timer objects
+    for i in 0 .. NUM_CPUS {
+        let gtmr = timer::GlobalTimer::new();
+        let handle = pic.add_source(interrupts.pics[i]);
+        pic.register_callback_on_intr(handle, intr::Interrupts::MSGBOX1 as usize, ipi_handler);
+        pic.register_callback_on_intr(handle, intr::Interrupts::TIMER3 as usize, gtmr);
+        // TODO: add to per cpu struct
+    }
+    // make these available to other cpus ^
+/* 
+    let mut pic = Box::new(pic::PIC::new());
+    for all cpus:
+        let handle = pic.add_source(interrupt_source[cpuid]);
+        pic.register_callback_on_intr(handle, intr::Interrupts::MSGBOX1 as usize, ipi_handler);
+        pic.register_callback_on_intr(handle, intr::Interrupts::TIMER3 as usize, gtmr);
+
+// in each cpu:
+    interrupts[cpuid].enable(msgbox1);
+    interrupts[cpuid].enable(gtmr);
+    gtmr.start_timer();
+
+*/
+
+    unsafe{current_page_table = super::super::cpu::get_ttb0();}
+
 
     for i in 1 .. NUM_CPUS {
         // TODO: allocate stack instead of making up random values..
@@ -212,7 +239,8 @@ pub fn init_board() -> PlatformServices {
         let stk = ::mem::VirtualAddress(0x100_0000 + 0x1000*i);
         mem_manager.map(pa, stk, ::mem::MemorySize::PageSizes(1)).unwrap();
 
-        unsafe{current_stack = stk.0  + ::platform::PAGE_SIZE};
+        unsafe{current_stack = stk.0 + ::platform::PAGE_SIZE;}
+
         ::arch::arm::cpu::memory_write_barrier();
 
         // wake up CPU
@@ -230,19 +258,48 @@ pub fn init_board() -> PlatformServices {
             }
         }
 
-        // wait for cpu to use the new stack
+        // wait for cpu to use the new stack and page table
         while cpus_awake.load(atomic::Ordering::SeqCst) != i {}
     }
-
+    // stub now not in use by anyone! -  now can deallocate 
+    let s_begin = &_stub_begin as *const*const Ptr as usize;
+    let s_end = &_stub_end as *const*const Ptr as usize;
+    ::platform::get_platform_services().frame_alloc.deallocate(down(s_begin), (up(s_end)-down(s_begin)) >> ::mem::PAGE_SHIFT);
     // TODO: start and wait for other CPUs
     // TODO: once other cpus started, and signaled that they swiched to use page_table and waiting somewhere in kernel virtmem, continue
     // TODO: remove stub from skip ranges
 
-    // TODO: scheduler should be somewhat available here..
 
+    vector::get_vec_table().set_irq_callback(interrupts);
+    // TODO: scheduler should be somewhat available here..
+    // TODO: setup gtmr
+    // TODO: setup mailbox interrupts to cpus ipi handler
     PlatformServices{
-    //    pic: pic_
+        interrupts: interrupts
         mailboxes : mailboxes
+    }
+}
+
+struct InterHandler {
+    pics : [4]intr::CorePIC
+
+}
+
+impl InterHandler {
+    fn new() -> Self {
+        pics = {
+            intr::CorePIC::new_for_cpu(0),
+            intr::CorePIC::new_for_cpu(1),
+            intr::CorePIC::new_for_cpu(2),
+            intr::CorePIC::new_for_cpu(3),
+        }
+    }
+}
+
+impl pic::InterruptSource for InterHandler {
+    fn interrupted(&self, ctx: &mut platform::Context) {
+        let cpuid = ::platform::get_current_cpu_id();
+        self.pics[cpuid].interrupted(ctx)
     }
 }
 
@@ -262,19 +319,23 @@ fn clear_ipi(ipi : ::cpu::IPI) {
 #[no_mangle]
 pub extern "C" fn rpi_multi_main() -> ! {
     // we got to here, that means that the stack 
-    // is no longer the temp stack, and we can continue and init other CPUs
+    // is no longer the temp stack.
+    
+    // just set the page table and off we go!  and we can continue and init other CPUs
+
+
+    // init real page table - just use the same page table for all cpus..
+    unsafe{ super::super::cpu::set_ttb0(current_page_table); }
+
+    // isb to make sure instructino completed
+    super::super::cpu::instruction_synchronization_barrier();
+    // flush tlb
+    super::super::cpu::invalidate_tlb();
+    // invalidate cache - as safety incase some code changed
+    super::super::cpu::invalidate_caches();  
 
     // notify..
     cpus_awake.fetch_add(1, atomic::Ordering::SeqCst);
-
-    // TODO: !!
-    // init real page table
-
-    if 1 == need_stub.fetch_sub(1, atomic::Ordering::SeqCst) {
-        // if previous value was one, it means that we are the last one that needed the stub
-        // and we can release it now
-        // TODO: release stub
-    }
 
     // TODO init timer
 

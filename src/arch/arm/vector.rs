@@ -253,6 +253,7 @@ fn vector_irq_handler(ctx: &mut InterruptContext) {
         if let Some(ref mut func) = VEC_TABLE.irq_callback {
             func.interrupted(ctx);
         }
+        platform::get_platform_services().post_interrupted(ctx);
     }
 }
 

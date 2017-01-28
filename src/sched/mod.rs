@@ -183,7 +183,7 @@ impl Sched {
 
     }
 
-    fn yeild_thread_no_intr(&self) {
+    pub fn yeild_thread_no_intr(&self) {
 
         // this can't be the idle thread...
 

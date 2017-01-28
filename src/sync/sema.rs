@@ -57,7 +57,6 @@ impl Semaphore {
         // if n is bigger than counter,
         // tell the scheduler that the current thread is waking
         // for (n-counter) units to arrive.
-        let maybeThread : Option<platform::ThreadId>;
         {
             let locked = self.sema.lock();
             locked.no_interrupts().release();

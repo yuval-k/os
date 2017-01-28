@@ -8,20 +8,16 @@ pub mod cpu;
 pub mod thread;
 pub mod pic;
 
-
-use platform;
-
-use ::mem::MemoryMapper;
-
 pub use self::board::write_to_console;
-
 pub use self::board::ticks_in_second;
-
 pub use self::board::send_ipi;
 
+pub fn get_num_cpus() -> usize {
+    board::NUM_CPUS
+}
 
 pub fn build_mode_stacks(mapper: &mut ::mem::MemoryMapper,
-                         mut frame_allocator: &mut ::mem::FrameAllocator) {
+                         frame_allocator: &mut ::mem::FrameAllocator) {
 
     const STACK_BASE: ::mem::VirtualAddress = ::mem::VirtualAddress(0xb000_0000);
     const NUM_PAGES: usize = 1;
