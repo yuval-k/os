@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Attach to QEMU",
+            "type": "gdb",
+            "request": "attach",
+            "remote": true,
+            "executable": "./target/kernel.img",
+            "target": "localhost:1234",
+            "cwd": "${workspaceRoot}",
+            "gdbpath": "${workspaceRoot}/gdb-native",
+            "preLaunchTask": "emulate-debug"
+        }
+    ]
+}
