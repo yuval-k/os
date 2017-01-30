@@ -97,6 +97,9 @@ pub struct PlatformServices {
   //  pic : Box<pic::PIC>
 }
 
+pub struct CpuServices {
+}
+
 pub fn send_ipi(id : usize, ipi : ::cpu::IPI) {
     panic!("no ipi support in integrator.")
 }
@@ -121,7 +124,7 @@ pub fn init_board() -> PlatformServices {
 
     interrupt_source.enable(intr::Interrupts::TIMERINT1 as usize);
 
-    let mut pic = Box::new(pic::PIC::new());
+    let mut pic : Box<pic::PIC< Box<pic::InterruptSource> > > = Box::new(pic::PIC::new());
     let handle = pic.add_source(interrupt_source);
     pic.register_callback_on_intr(handle, intr::Interrupts::TIMERINT1 as usize, tmr);
 

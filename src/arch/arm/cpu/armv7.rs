@@ -88,20 +88,20 @@ pub fn wait_for_interrupts() {
     }
 }
 
-fn read_cnt_frq() -> u32 { read_reg!("p15,0,$0,c14,c0,0") }
-fn write_cnt_frq(i : u32){write_reg!("p15,0,$0,c14,c0,0", i)}
+pub fn read_cnt_frq() -> u32 { read_reg!("p15,0,$0,c14,c0,0") }
+pub fn write_cnt_frq(i : u32){write_reg!("p15,0,$0,c14,c0,0", i)}
 
-fn read_cntk_ctl() -> u32 { read_reg!("p15,0,$0,c14,c1,0") }
-fn write_cntk_ctl(i : u32){write_reg!("p15,0,$0,c14,c1,0", i)}
+pub fn read_cntk_ctl() -> u32 { read_reg!("p15,0,$0,c14,c1,0") }
+pub fn write_cntk_ctl(i : u32){write_reg!("p15,0,$0,c14,c1,0", i)}
 
-fn read_cntp_tval() -> u32 { read_reg!("p15,0,$0,c14,c2,0") }
-fn write_cntp_tval(i : u32){write_reg!("p15,0,$0,c14,c2,0", i)}
+pub fn read_cntp_tval() -> u32 { read_reg!("p15,0,$0,c14,c2,0") }
+pub fn write_cntp_tval(i : u32){write_reg!("p15,0,$0,c14,c2,0", i)}
 
-fn read_cntp_ctl() -> u32 { read_reg!("p15,0,$0,c14,c2,1") }
-fn write_cntp_ctl(i : u32){write_reg!("p15,0,$0,c14,c2,1", i)}
+pub fn read_cntp_ctl() -> u32 { read_reg!("p15,0,$0,c14,c2,1") }
+pub fn write_cntp_ctl(i : u32){write_reg!("p15,0,$0,c14,c2,1", i)}
 
-fn read_cntv_tval() -> u32 { read_reg!("p15,0,$0,c14,c3,0") }
-fn write_cntv_tval(i : u32){write_reg!("p15,0,$0,c14,c3,0", i)}
+pub fn read_cntv_tval() -> u32 { read_reg!("p15,0,$0,c14,c3,0") }
+pub fn write_cntv_tval(i : u32){write_reg!("p15,0,$0,c14,c3,0", i)}
 
-fn read_cntv_ctl() -> u32 { read_reg!("p15,0,$0,c14,c3,1") }
-fn write_cntv_ctl(i : u32){write_reg!("p15,0,$0,c14,c3,1", i)}
+pub fn read_cntv_ctl() -> u32 { read_reg!("p15,0,$0,c14,c3,1") }
+pub fn write_cntv_ctl(i : u32){write_reg!("p15,0,$0,c14,c3,1", i)}

@@ -84,6 +84,12 @@ impl pic::InterruptSource for PIC {
 
     fn is_interrupted(&self, interrupt: usize) -> bool {
         let flags: PicFlags = PicFlags::from_bits_truncate(1 << interrupt);
+
+        // interrupt is not really an interrupt...  i should really fix this at some point..
+        if flags.bits == 0 {
+            return false;
+        }
+
         let status = self.interrupt_status();
 
         status.contains(flags)

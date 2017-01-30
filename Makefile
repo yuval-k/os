@@ -1,20 +1,20 @@
 CROSS_TOOL_TARGET ?= arm-none-eabi
 ARCH=arm
 
-# BOARD=rpi2
-BOARD=integrator
+# BOARD?=rpi2
+BOARD?=integrator
 
 ifeq ($(BOARD),rpi2)
 TARGET ?= armv7-unknown-linux-gnueabihf
 MACHINE=raspi2
-QEMU=docker run -t -i -p 1234:1234 --rm -v $(shell pwd):$(shell pwd):ro --workdir $(shell pwd) qemu-rpi qemu-system-arm
+QEMU=qemu-system-arm
 RUSTCFLAGS=
 endif
 
 ifeq ($(BOARD),integrator)
 TARGET ?= arm-unknown-linux-gnueabi
-MACHINE=integratorcp -cpu arm1176
-QEMU=qemu-system-arm -m 128
+MACHINE=integratorcp -m 128 -cpu arm1176
+QEMU=qemu-system-arm
 RUSTCFLAGS=-Ctarget-cpu=arm1176jz-s
 endif
 
@@ -50,7 +50,7 @@ $(os_lib): cargo
 
 cargo:
 	# see here: https://mail.mozilla.org/pipermail/rust-dev/2014-March/009153.html
-	cargo rustc --features board-$(BOARD) --target=$(TARGET) -- -g $(RUSTCFLAGS) 
+	cargo rustc --features board-$(BOARD) --target=$(TARGET) --  $(RUSTCFLAGS) 
 
 $(stub_object): $(stub)
 	$(CPP) $(stub) |  $(AS) -g -o $(stub_object)

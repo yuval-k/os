@@ -13,6 +13,9 @@
         },
         {
             "taskName": "build",
+            "args": [
+                "BOARD=integrator"
+            ],
             "isBuildCommand": true,
             "problemMatcher": {
                 "owner": "rust",

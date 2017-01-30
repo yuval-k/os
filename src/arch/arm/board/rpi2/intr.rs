@@ -65,8 +65,8 @@ impl pic::InterruptSource for CorePIC {
         if ! timers.is_empty() {
             let ptr: *mut u32 = self.vbase.uoffset(TIMER_CONTROL_OFFSET).0 as *mut u32;
             unsafe {
-                let curstatus : i32 = unsafe { volatile_load(ptr) };
-                curstatus |= flag.bits;
+                let curstatus : u32 = unsafe { volatile_load(ptr) };
+                curstatus |= timers.bits;
                 volatile_store(ptr, curstatus);
             }
         }
@@ -75,8 +75,8 @@ impl pic::InterruptSource for CorePIC {
         if ! msgboxs.is_empty() {
             let ptr: *mut u32 = self.vbase.uoffset(MAILBOX_CONTROL_OFFSET).0 as *mut u32;
             unsafe {
-                let curstatus : i32 = unsafe { volatile_load(ptr) };
-                curstatus |= (flag.bits >> 4);
+                let curstatus : u32 = unsafe { volatile_load(ptr) };
+                curstatus |= msgboxs.bits >> 4;
                 volatile_store(ptr, curstatus);
             }
         }
@@ -88,8 +88,8 @@ impl pic::InterruptSource for CorePIC {
         if ! timers.is_empty() {
             let ptr: *mut u32 = self.vbase.uoffset(TIMER_CONTROL_OFFSET).0 as *mut u32;
             unsafe {     
-                let curstatus : i32 = unsafe { volatile_load(ptr) };
-                curstatus &= !flag.bits;
+                let curstatus : u32 = unsafe { volatile_load(ptr) };
+                curstatus &= !timers.bits;
                 volatile_store(ptr, curstatus);
             }
         }
@@ -97,8 +97,8 @@ impl pic::InterruptSource for CorePIC {
         if ! msgboxs.is_empty() {
             let ptr: *mut u32 = self.vbase.uoffset(MAILBOX_CONTROL_OFFSET).0 as *mut u32;
             unsafe {
-                let curstatus : i32 = unsafe { volatile_load(ptr) };
-                curstatus &= !(flag.bits >> 4);
+                let curstatus : u32 = unsafe { volatile_load(ptr) };
+                curstatus &= !(msgboxs.bits >> 4);
                 volatile_store(ptr, curstatus);
             }
         }
@@ -106,7 +106,6 @@ impl pic::InterruptSource for CorePIC {
     
     fn is_interrupted(&self, interrupt : usize) -> bool {
         let intr : CorePicFlags = CorePicFlags::from_bits_truncate(1<<interrupt);
-        let status = self.interrupt_status();
         
         let ptr: *mut u32 = self.vbase.uoffset(INTR_SOURCE_OFFSET).0 as *mut u32;
         let is : u32 = unsafe { volatile_load(ptr)};
@@ -115,38 +114,19 @@ impl pic::InterruptSource for CorePIC {
         intr_source.contains(intr)
     }
     
-    fn interrupted(&self, interrupt : usize, ctx: &mut platform::Context) {
-        let flags : CorePicFlags = CorePicFlags::from_bits_truncate(1<<interrupt);
-
-        match flags {
-            CNTVIRQ => self.timer_interrupted(ctx),
-            _ => panic!("unexpected interrupt")
-        };
-    }
 }
 
 impl CorePIC {
     pub fn new() -> Self {
-        let cpuid = ::platform::get_platform_services().get_current_cpu().id;
-        new_for_cpu(cpuid)
+        let cpuid = ::platform::get_current_cpu_id();
+        Self::new_for_cpu(cpuid)
     }
     pub fn new_for_cpu(cpuid : usize) -> Self {
         let vbase = ::platform::get_platform_services().mem_manager.p2v(PIC_BASE_PADDR).unwrap();
 
         CorePIC {
             vbase: vbase.uoffset(4*cpuid),
-            callback: None,
         }
-    }
-
-    pub fn timer_interrupted(&self, ctx: &mut platform::Context) {
-         if let Some(ref callback) = self.callback {
-                callback.interrupted(ctx);
-            }
-    }
-
-    pub fn add_timer_callback(&mut self, callback: Box<platform::Interruptable>) {
-        self.callback = Some(callback);
     }
 
 }

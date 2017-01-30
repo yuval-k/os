@@ -9,8 +9,7 @@
             "executable": "./target/kernel.img",
             "target": "localhost:1234",
             "cwd": "${workspaceRoot}",
-            "gdbpath": "${workspaceRoot}/gdb-native",
-            "preLaunchTask": "emulate-debug"
+            "gdbpath": "${workspaceRoot}/gdb-native"
         }
     ]
 }

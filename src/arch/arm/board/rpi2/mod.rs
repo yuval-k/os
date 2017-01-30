@@ -7,9 +7,11 @@ pub mod timer;
 use core;
 use core::sync::atomic;
 use core::intrinsics::{volatile_load, volatile_store};
+use collections::boxed::Box;
 
 use super::super::mem;
 use super::super::pic;
+use ::platform;
 use rlibc;
 
 use mem::MemoryMapper;
@@ -22,7 +24,7 @@ pub const NUM_CPUS : usize = 4;
 
 
 static mut current_stack : usize = 0;
-static mut current_page_table: *const () = 0;
+static mut current_page_table: *const () = 0 as  *const ();
 static cpus_awake: atomic::AtomicUsize = atomic::ATOMIC_USIZE_INIT;
 
 fn up(a: usize) -> ::mem::PhysicalAddress {
@@ -169,6 +171,13 @@ pub struct PlatformServices {
 //    pic : Box<pic::PIC>
     mailboxes : mailbox::LocalMailbox
 }
+
+
+pub struct CpuServices {
+//    pic : Box<pic::PIC>
+    mailboxes : mailbox::LocalMailbox
+}
+
 extern {
     fn _secondary_start () -> !;
 }
@@ -264,42 +273,35 @@ pub fn init_board() -> PlatformServices {
     // stub now not in use by anyone! -  now can deallocate 
     let s_begin = &_stub_begin as *const*const Ptr as usize;
     let s_end = &_stub_end as *const*const Ptr as usize;
-    ::platform::get_platform_services().frame_alloc.deallocate(down(s_begin), (up(s_end)-down(s_begin)) >> ::mem::PAGE_SHIFT);
-    // TODO: start and wait for other CPUs
+    ::platform::get_platform_services().frame_alloc.deallocate(down(s_begin), ::mem::to_pages(up(s_end)-down(s_begin)).expect("misaligned pages!"));
     // TODO: once other cpus started, and signaled that they swiched to use page_table and waiting somewhere in kernel virtmem, continue
     // TODO: remove stub from skip ranges
 
 
-    vector::get_vec_table().set_irq_callback(interrupts);
+    super::super::vector::get_vec_table().set_irq_callback(pic);
     // TODO: scheduler should be somewhat available here..
     // TODO: setup gtmr
     // TODO: setup mailbox interrupts to cpus ipi handler
     PlatformServices{
-        interrupts: interrupts
+        interrupts: interrupts,
         mailboxes : mailboxes
     }
 }
 
 struct InterHandler {
-    pics : [4]intr::CorePIC
-
+    pics : [intr::CorePIC; 4]
 }
 
 impl InterHandler {
     fn new() -> Self {
-        pics = {
-            intr::CorePIC::new_for_cpu(0),
-            intr::CorePIC::new_for_cpu(1),
-            intr::CorePIC::new_for_cpu(2),
-            intr::CorePIC::new_for_cpu(3),
-        }
+        InterHandler {
+            pics : [
+                intr::CorePIC::new_for_cpu(0),
+                intr::CorePIC::new_for_cpu(1),
+                intr::CorePIC::new_for_cpu(2),
+                intr::CorePIC::new_for_cpu(3),
+            ]
     }
-}
-
-impl pic::InterruptSource for InterHandler {
-    fn interrupted(&self, ctx: &mut platform::Context) {
-        let cpuid = ::platform::get_current_cpu_id();
-        self.pics[cpuid].interrupted(ctx)
     }
 }
 
