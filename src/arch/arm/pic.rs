@@ -13,16 +13,17 @@ pub trait InterruptSource {
     fn is_interrupted(&self, interrupt : usize) -> bool;
 }
 
-pub struct PIC<InterruptSourceT: Borrow<InterruptSource> >{
+pub struct PIC<InterruptSourceT: Borrow<InterruptSource>, InterruptableT: Borrow<platform::Interruptable>  >{
     sources : Vec<InterruptSourceT>,
-    callbacks : Vec<Option<Box<platform::Interruptable>>>,
+    callbacks : Vec<Option<InterruptableT>>,
 }
 
+#[derive(Clone,Copy)]
 pub struct InterruptSourceHandle(usize);
 
 
-impl<InterruptSourceT: Borrow<InterruptSource> >  PIC<InterruptSourceT> {
-    pub fn new() -> PIC<InterruptSourceT> {
+impl<InterruptSourceT: Borrow<InterruptSource>, InterruptableT: Borrow<platform::Interruptable> >  PIC<InterruptSourceT, InterruptableT> {
+    pub fn new() -> PIC<InterruptSourceT, InterruptableT> {
         PIC { 
             sources : vec![],
             callbacks : vec![],
@@ -39,7 +40,7 @@ impl<InterruptSourceT: Borrow<InterruptSource> >  PIC<InterruptSourceT> {
         InterruptSourceHandle(self.sources.len() - 1)
     }
 
-    pub fn register_callback_on_intr(&mut self, h : InterruptSourceHandle, interrupt : usize, handler : Box<platform::Interruptable>) {
+    pub fn register_callback_on_intr(&mut self, h : InterruptSourceHandle, interrupt : usize, handler : InterruptableT) {
         // find callback index:
         let ci = self.get_callback_index(h.0, interrupt);
         self.callbacks[ci] = Some(handler);
@@ -56,7 +57,7 @@ impl<InterruptSourceT: Borrow<InterruptSource> >  PIC<InterruptSourceT> {
     }
 }
 
-impl<InterruptSourceT: Borrow<InterruptSource> >  platform::Interruptable for PIC<InterruptSourceT> {
+impl<InterruptSourceT: Borrow<InterruptSource> , InterruptableT: Borrow<platform::Interruptable> >  platform::Interruptable for PIC<InterruptSourceT, InterruptableT> {
     fn interrupted(&self, ctx: &mut platform::Context) {
         let mut source_index : usize = 0;
         for is in &self.sources {
@@ -65,7 +66,7 @@ impl<InterruptSourceT: Borrow<InterruptSource> >  platform::Interruptable for PI
                 if is.is_interrupted(intr) {
                     let idx = self.get_callback_index(source_index, intr);
                     if let Some(ref cb) = self.callbacks[idx] {
-                        cb.interrupted(ctx);
+                        cb.borrow().interrupted(ctx);
                     } else {
                         panic!("unexpected interrupt")
                     }

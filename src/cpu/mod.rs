@@ -9,6 +9,7 @@ pub struct CPU {
     running_thread : RefCell<Option<Box<::thread::Thread>>>,
     id : usize,
     pub should_resched : Cell<bool>,
+//    pub arch_services : RefCell<ArchCPUServices>,
 }
 
 #[derive(Clone, Copy)]

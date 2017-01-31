@@ -71,7 +71,7 @@ pub fn set_ttb0(page_table: *const ()) {
 pub fn get_ttb0() -> *const () {
     let mut ttb0: u32;
     unsafe {
-        asm!("mcr p15, 0, $0, c2, c0, 0":  "=r"(ttb0));
+        asm!("mrc p15, 0, $0, c2, c0, 0":  "=r"(ttb0));
     }
     return ttb0 as *const ();
 }

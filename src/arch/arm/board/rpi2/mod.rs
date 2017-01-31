@@ -8,6 +8,7 @@ use core;
 use core::sync::atomic;
 use core::intrinsics::{volatile_load, volatile_store};
 use collections::boxed::Box;
+use alloc::rc::Rc;
 
 use super::super::mem;
 use super::super::pic;
@@ -18,6 +19,7 @@ use mem::MemoryMapper;
 use mem::PVMapper;
 
 use device::serial::SerialMMIO;
+use arch::arm::pic::InterruptSource;
 
 pub const ticks_in_second : usize = 20;
 pub const NUM_CPUS : usize = 4;
@@ -25,7 +27,7 @@ pub const NUM_CPUS : usize = 4;
 
 static mut current_stack : usize = 0;
 static mut current_page_table: *const () = 0 as  *const ();
-static cpus_awake: atomic::AtomicUsize = atomic::ATOMIC_USIZE_INIT;
+static CPUS_AWAKE: atomic::AtomicUsize = atomic::ATOMIC_USIZE_INIT;
 
 fn up(a: usize) -> ::mem::PhysicalAddress {
     ::mem::PhysicalAddress((a + mem::PAGE_MASK) & (!mem::PAGE_MASK))
@@ -55,8 +57,6 @@ extern "C" {
     static _kernel_start_phy : *const Ptr;
     static _kernel_start_virt : *const Ptr;
     static _kernel_end_virt : *const Ptr;
-    static stub_l1pagetable : *const Ptr;
-    static stub_l2pagetable : *const Ptr;
     static __bss_start : *const Ptr;
     static __bss_end : *const Ptr;
     
@@ -167,9 +167,25 @@ pub fn write_to_console(s: &str) {
     serial::Writer::new(unsafe { serial_base }).writeln(s);
 }
 
+pub fn send_ipi(id : usize, ipi : ::cpu::IPI) {
+    if ! platform::is_system_ready() {
+        return;
+    }
+    // only do if we are initialized.
+    let mailboxes = & ::platform::get_platform_services().arch_services.as_ref().unwrap().board_services.mailboxes;
+    mailboxes.mailboxes[id].set_high(mailbox::MailboxIndex::MailboxZero, 1 <<  (ipi as usize));
+}
+
+
+fn clear_ipi(ipi : ::cpu::IPI) {
+    let id = ::platform::get_current_cpu_id();
+    let mailboxes = & ::platform::get_platform_services().arch_services.as_ref().unwrap().board_services.mailboxes;
+    mailboxes.mailboxes[id].set_low(mailbox::MailboxIndex::MailboxZero, 1 << (ipi as usize));
+}
 pub struct PlatformServices {
 //    pic : Box<pic::PIC>
-    mailboxes : mailbox::LocalMailbox
+    mailboxes : mailbox::LocalMailbox,
+    timers : [Rc<timer::GlobalTimer>; 4 ],
 }
 
 
@@ -210,18 +226,26 @@ pub fn init_board() -> PlatformServices {
     let base = mem_manager.p2v(ARM_LOCAL_PSTART).unwrap();
         
     let mailboxes = mailbox::LocalMailbox::new();
-    let interrupts = InterHandler::new();
-    let mut pic = Box::new(pic::PIC::new());
+   // let mut pic = Box::new(pic::PIC::new());
+    let mut pic : pic::PIC< Box<pic::InterruptSource> , Rc<platform::Interruptable> > = pic::PIC::new();
+  
 // part of cpu struct?
 
+    let ipi_handler = Rc::new(IPIHandler{});
+
     // create global timer objects
+    let timers = [Rc::new(timer::GlobalTimer::new()), Rc::new(timer::GlobalTimer::new()), Rc::new(timer::GlobalTimer::new()), Rc::new(timer::GlobalTimer::new())];
     for i in 0 .. NUM_CPUS {
-        let gtmr = timer::GlobalTimer::new();
-        let handle = pic.add_source(interrupts.pics[i]);
-        pic.register_callback_on_intr(handle, intr::Interrupts::MSGBOX1 as usize, ipi_handler);
-        pic.register_callback_on_intr(handle, intr::Interrupts::TIMER3 as usize, gtmr);
+        let corepic = Box::new(intr::CorePIC::new_for_cpu(i));
+        corepic.enable(intr::Interrupts::Mailbox0 as usize);
+        corepic.enable(intr::Interrupts::CNTVIRQ as usize);
+        let handle = pic.add_source( corepic ); //
+        pic.register_callback_on_intr(handle, intr::Interrupts::Mailbox0 as usize, ipi_handler.clone());
+        pic.register_callback_on_intr(handle, intr::Interrupts::CNTVIRQ as usize,timers[i].clone()); // dont init timer here, but from the cpecific cpu
         // TODO: add to per cpu struct
     }
+    drop(ipi_handler);
+    
     // make these available to other cpus ^
 /* 
     let mut pic = Box::new(pic::PIC::new());
@@ -241,6 +265,8 @@ pub fn init_board() -> PlatformServices {
 
 
     for i in 1 .. NUM_CPUS {
+
+        platform::get_mut_platform_services().scheduler.add_idle_thread_for_cpu_id(i);
         // TODO: allocate stack instead of making up random values..
         
         let pa = fa.allocate(1).unwrap();
@@ -255,20 +281,20 @@ pub fn init_board() -> PlatformServices {
         // wake up CPU
         // TODO: WAKE UP CPU
         // write start address to CPU N mailbox 3
-        mailboxes.mailboxes[i].set_high(3, _secondary_start as *const u32 as u32);
+        mailboxes.mailboxes[i].set_high(mailbox::MailboxIndex::MailboxThree, _secondary_start as *const u32 as u32);
 
         // wait for cpu to start
         loop {
             // other cpu hatched and cleared his mailbox
             // what the other cpu does, is "documented" in qemu's write_smpboot: https://github.com/qemu/qemu/blob/4771d756f46219762477aaeaaef9bd215e3d5c60/hw/arm/raspi.c#L35)
-            let cpunmbox3 = mailboxes.mailboxes[i].read(3);
+            let cpunmbox3 = mailboxes.mailboxes[i].read(mailbox::MailboxIndex::MailboxThree);
             if cpunmbox3 == 0 {
                 break;
             }
         }
 
         // wait for cpu to use the new stack and page table
-        while cpus_awake.load(atomic::Ordering::SeqCst) != i {}
+        while CPUS_AWAKE.load(atomic::Ordering::SeqCst) != i {}
     }
     // stub now not in use by anyone! -  now can deallocate 
     let s_begin = &_stub_begin as *const*const Ptr as usize;
@@ -277,73 +303,121 @@ pub fn init_board() -> PlatformServices {
     // TODO: once other cpus started, and signaled that they swiched to use page_table and waiting somewhere in kernel virtmem, continue
     // TODO: remove stub from skip ranges
 
+    let interrupts = InterHandler{pic:pic};
 
-    super::super::vector::get_vec_table().set_irq_callback(pic);
+    super::super::vector::get_vec_table().set_irq_callback(Box::new(interrupts));
+
+    timers[0].start_timer();
     // TODO: scheduler should be somewhat available here..
     // TODO: setup gtmr
     // TODO: setup mailbox interrupts to cpus ipi handler
     PlatformServices{
-        interrupts: interrupts,
-        mailboxes : mailboxes
+        mailboxes : mailboxes,
+        timers : timers,
     }
 }
 
 struct InterHandler {
-    pics : [intr::CorePIC; 4]
+    pic : pic::PIC<Box<pic::InterruptSource> , Rc<platform::Interruptable> >
 }
 
-impl InterHandler {
-    fn new() -> Self {
-        InterHandler {
-            pics : [
-                intr::CorePIC::new_for_cpu(0),
-                intr::CorePIC::new_for_cpu(1),
-                intr::CorePIC::new_for_cpu(2),
-                intr::CorePIC::new_for_cpu(3),
-            ]
-    }
+impl platform::Interruptable for InterHandler {
+    fn interrupted(&self, ctx: &mut platform::Context) {
     }
 }
 
-pub fn send_ipi(id : usize, ipi : ::cpu::IPI) {
-    let mailboxes = & ::platform::get_platform_services().arch_services.as_ref().unwrap().board_services.mailboxes;
-    mailboxes.mailboxes[id].set_high(0, 1 <<  (ipi as usize));
+struct IPIHandler {
 }
 
+impl platform::Interruptable for IPIHandler {
+    fn interrupted(&self, ctx: &mut platform::Context) {
+    
+        let id = ::platform::get_current_cpu_id();
+        let mailboxes = & ::platform::get_platform_services().arch_services.as_ref().unwrap().board_services.mailboxes;
+        let mut ipis = mailboxes.mailboxes[id].read(mailbox::MailboxIndex::MailboxZero);
+        let mut cur_ipi = 0u32;
+        while ipis != 0 {
+            if   (ipis & 1) != 0  {
+                let cur_ipi_enum = int_to_ipi(cur_ipi);
+                clear_ipi(cur_ipi_enum);
+                // send IPI!    
+                ::platform::get_platform_services().get_current_cpu().interrupted(cur_ipi_enum);
+            }
 
-fn clear_ipi(ipi : ::cpu::IPI) {
-    let id = ::platform::get_platform_services().get_current_cpu().id();
-    let mailboxes = & ::platform::get_platform_services().arch_services.as_ref().unwrap().board_services.mailboxes;
-    mailboxes.mailboxes[id].set_low(0, 1 << (ipi as usize));
+            cur_ipi += 1;
+            ipis = ipis >> 1;
+        }
+    }
 }
 
+fn int_to_ipi(i : u32) -> ::cpu::IPI{
+    match i {
+        0 => ::cpu::IPI::MEM_CHANGED,
+        1 => ::cpu::IPI::SCHED_CHANGED,
+        _ => panic!("unknown IPIs")
+    
+    }
+}
 
 #[no_mangle]
 pub extern "C" fn rpi_multi_main() -> ! {
     // we got to here, that means that the stack 
     // is no longer the temp stack.
-    
-    // just set the page table and off we go!  and we can continue and init other CPUs
-
-
-    // init real page table - just use the same page table for all cpus..
-    unsafe{ super::super::cpu::set_ttb0(current_page_table); }
-
-    // isb to make sure instructino completed
-    super::super::cpu::instruction_synchronization_barrier();
-    // flush tlb
-    super::super::cpu::invalidate_tlb();
-    // invalidate cache - as safety incase some code changed
-    super::super::cpu::invalidate_caches();  
 
     // notify..
-    cpus_awake.fetch_add(1, atomic::Ordering::SeqCst);
-
-    // TODO init timer
+    CPUS_AWAKE.fetch_add(1, atomic::Ordering::SeqCst);
 
     // TODO method for all CPUs:
     // unmask mailbox interrupts (dedicate one mailbox to page table changes?)
     // ??
 
-    loop{}
+    while ! platform::is_system_ready() {
+    }
+
+    let tid = platform::ThreadId(::sched::MAIN_THREAD_ID.0 + platform::get_current_cpu_id());
+    platform::get_platform_services().get_current_cpu().set_running_thread(Box::new(::thread::Thread::new_cur_thread(tid)));
+
+    let timers = & ::platform::get_platform_services().arch_services.as_ref().unwrap().board_services.timers;
+
+    timers[::platform::get_current_cpu_id()].start_timer();
+
+
+    // enable interrupts
+    platform::set_interrupts(true);
+    loop {
+        platform::get_platform_services().get_scheduler().yield_thread();
+    }
+
+}
+
+#[naked] #[no_mangle]
+pub extern "C" fn rpi_multi_pre_main() -> ! {
+
+    // just set the page table and off we go!  and we can continue and init other CPUs
+
+//TODO: make sure this uses no stack! - current stack will only be valid after the new mapping,
+// and old stack will be invalid after the mapping.. so..
+// this is a bit hacky as i am hoping that no stack will be used (there's no reason for it, anyway..)
+
+    // init real page table - just use the same page table for all cpus..
+    unsafe{ super::super::cpu::set_ttb0(current_page_table); }
+    // isb to make sure instructino completed
+    super::super::cpu::instruction_synchronization_barrier();
+    // flush tlb
+    super::super::cpu::invalidate_tlb();
+    // invalidate cache - as safety incase some code changed
+    super::super::cpu::invalidate_caches(); 
+
+    unsafe {
+        asm!("mov sp, $1
+            b $0 "
+            :: 
+            "i"(rpi_multi_main as extern "C" fn() -> !),
+            "r"(current_stack)
+            : "sp" : "volatile"
+      )
+    }
+    unsafe {
+        ::core::intrinsics::unreachable();
+    }
 }

@@ -1,6 +1,8 @@
 use core::ops::Sub;
 use alloc::rc::Rc;
 use collections::boxed::Box;
+use super::platform;
+use super::cpu;
 
 #[derive(Copy, Clone, Debug)]
 pub enum MemorySize {
@@ -17,16 +19,16 @@ pub fn to_bytes(x: MemorySize) -> usize {
         MemorySize::KiloBytes(k) => k << 10,
         MemorySize::MegaBytes(m) => m << 20,
         MemorySize::GigaBytes(g) => g << 30,
-        MemorySize::PageSizes(p) => p << super::platform::PAGE_SHIFT,
+        MemorySize::PageSizes(p) => p << platform::PAGE_SHIFT,
     }
 }
 
 pub fn to_pages(x: MemorySize) -> Result<usize, ()> {
     let b = to_bytes(x);
-    if (b & super::platform::PAGE_MASK) != 0 {
+    if (b & platform::PAGE_MASK) != 0 {
         Err(())
     } else {
-        Ok(b >> super::platform::PAGE_SHIFT)
+        Ok(b >> platform::PAGE_SHIFT)
     }
 }
 
@@ -143,16 +145,23 @@ impl MemoryManagaer for DefaultMemoryManagaer {
            v: VirtualAddress,
            size: MemorySize)
            -> Result<(), ()> {
-        // TODO: add IPI
-        self.mem_mapper.map(self.frame_allocator.as_ref(), p, v, size)
+        let r = self.mem_mapper.map(self.frame_allocator.as_ref(), p, v, size);
+        if let Ok(_) = r {
+            platform::get_platform_services().get_current_cpu().send_ipi_to_others(cpu::IPI::MEM_CHANGED);
+        }
+
+        r
     }
 
     fn unmap(&self,
              v: VirtualAddress,
              size: MemorySize)
              -> Result<(), ()> {
-        // TODO: add IPI
-        self.mem_mapper.unmap(self.frame_allocator.as_ref(), v, size)
+        let r = self.mem_mapper.unmap(self.frame_allocator.as_ref(), v, size);
+        if let Ok(_) = r {
+            platform::get_platform_services().get_current_cpu().send_ipi_to_others(cpu::IPI::MEM_CHANGED);
+        }
+        r
     }
 
     fn map_device(&self,
@@ -161,7 +170,11 @@ impl MemoryManagaer for DefaultMemoryManagaer {
                   size: MemorySize)
                   -> Result<(), ()> {
         // TODO: add IPI
-        self.mem_mapper.map_device(self.frame_allocator.as_ref(), p, v, size)
+        let r = self.mem_mapper.map_device(self.frame_allocator.as_ref(), p, v, size);
+        if let Ok(_) = r {
+            platform::get_platform_services().get_current_cpu().send_ipi_to_others(cpu::IPI::MEM_CHANGED);
+        }
+        r
     }
 }
 

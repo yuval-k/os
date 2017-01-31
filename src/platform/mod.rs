@@ -5,6 +5,7 @@ use collections::boxed::Box;
 use alloc::rc::Rc;
 use core::cell::UnsafeCell;
 use collections::Vec;
+use core::sync::atomic;
 
 #[cfg(target_arch = "arm")]
 mod arm;
@@ -80,3 +81,17 @@ impl PlatformServices {
     }
     
 }
+
+
+static IS_SYS_READY : atomic::AtomicBool = atomic::ATOMIC_BOOL_INIT;
+
+
+pub fn set_system_ready() {
+
+    IS_SYS_READY.store(true, atomic::Ordering::Release)
+}
+
+pub fn is_system_ready() -> bool {
+    IS_SYS_READY.load(atomic::Ordering::Acquire)
+}
+

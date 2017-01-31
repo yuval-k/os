@@ -9,7 +9,10 @@
             "executable": "./target/kernel.img",
             "target": "localhost:1234",
             "cwd": "${workspaceRoot}",
-            "gdbpath": "${workspaceRoot}/gdb-native"
+            "gdbpath": "${workspaceRoot}/gdb-native",
+            "autorun": [
+                "symbol-file ./target/kernel.img"
+            ]
         }
     ]
 }

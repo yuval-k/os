@@ -84,9 +84,9 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
     // set current thread
     platform::get_platform_services().get_current_cpu().set_running_thread(Box::new(thread::Thread::new_cur_thread(sched::MAIN_THREAD_ID)));
 
-    platform::get_mut_platform_services().scheduler.add_idle_thread_for_cpu();
 
     // TODO add the sched interrupt back, to be explicit
+    platform::get_mut_platform_services().scheduler.add_idle_thread_for_cpu();
     let arch_plat_services = init_platform();
 
     unsafe{
@@ -94,6 +94,8 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
     }
     // scheduler is ready ! we can use sync objects!
 
+    // platform services is fully initialized, so we can start processing IPIs and the such..
+    platform::set_system_ready();
     // enable interrupts!
     platform::set_interrupts(true);
 

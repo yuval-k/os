@@ -65,7 +65,7 @@ impl pic::InterruptSource for CorePIC {
         if ! timers.is_empty() {
             let ptr: *mut u32 = self.vbase.uoffset(TIMER_CONTROL_OFFSET).0 as *mut u32;
             unsafe {
-                let curstatus : u32 = unsafe { volatile_load(ptr) };
+                let mut curstatus : u32 = unsafe { volatile_load(ptr) };
                 curstatus |= timers.bits;
                 volatile_store(ptr, curstatus);
             }
@@ -75,7 +75,7 @@ impl pic::InterruptSource for CorePIC {
         if ! msgboxs.is_empty() {
             let ptr: *mut u32 = self.vbase.uoffset(MAILBOX_CONTROL_OFFSET).0 as *mut u32;
             unsafe {
-                let curstatus : u32 = unsafe { volatile_load(ptr) };
+                let mut curstatus : u32 = unsafe { volatile_load(ptr) };
                 curstatus |= msgboxs.bits >> 4;
                 volatile_store(ptr, curstatus);
             }
@@ -88,7 +88,7 @@ impl pic::InterruptSource for CorePIC {
         if ! timers.is_empty() {
             let ptr: *mut u32 = self.vbase.uoffset(TIMER_CONTROL_OFFSET).0 as *mut u32;
             unsafe {     
-                let curstatus : u32 = unsafe { volatile_load(ptr) };
+                let mut curstatus : u32 = unsafe { volatile_load(ptr) };
                 curstatus &= !timers.bits;
                 volatile_store(ptr, curstatus);
             }
@@ -97,7 +97,7 @@ impl pic::InterruptSource for CorePIC {
         if ! msgboxs.is_empty() {
             let ptr: *mut u32 = self.vbase.uoffset(MAILBOX_CONTROL_OFFSET).0 as *mut u32;
             unsafe {
-                let curstatus : u32 = unsafe { volatile_load(ptr) };
+                let mut curstatus : u32 = unsafe { volatile_load(ptr) };
                 curstatus &= !(msgboxs.bits >> 4);
                 volatile_store(ptr, curstatus);
             }

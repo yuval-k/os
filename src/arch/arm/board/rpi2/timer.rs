@@ -16,6 +16,12 @@ pub struct GlobalTimer {
 
 impl GlobalTimer {
 
+	pub fn new() -> Self {
+		GlobalTimer{
+			time : 10000
+		}
+	}
+
 	pub fn start_timer(&self) {
 		cpu::write_cntv_tval(self.time);
 

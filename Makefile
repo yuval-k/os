@@ -6,7 +6,7 @@ BOARD?=integrator
 
 ifeq ($(BOARD),rpi2)
 TARGET ?= armv7-unknown-linux-gnueabihf
-MACHINE=raspi2
+MACHINE=raspi2 -smp 4
 QEMU=qemu-system-arm
 RUSTCFLAGS=
 endif
@@ -34,6 +34,7 @@ AS=$(TARGET)-as
 CPP=$(TARGET)-cpp
 LD=$(TARGET)-ld
 CC=$(TARGET)-cc
+OBJCOPY=$(TARGET)-objcopy
 
 .PHONY: toolchain
 toolchain:
@@ -41,10 +42,10 @@ toolchain:
 	rustup target add $(TARGET)
 	
 emulate: target/kernel.img
-	$(QEMU) -machine $(MACHINE) -kernel target/kernel.img -serial stdio
+	$(QEMU) -machine $(MACHINE) -kernel target/kernel.img -serial stdio -s
 
-emulate-debug: target/kernel.img
-	$(QEMU) -machine $(MACHINE) -kernel target/kernel.img -serial stdio -s -S
+emulate-debug: target/kernel.raw
+	$(QEMU) -machine $(MACHINE) -kernel target/kernel.raw -serial stdio -s -S
 
 $(os_lib): cargo
 
@@ -62,7 +63,10 @@ target/kernel.img: $(os_lib) $(linker_script) $(stub_object) $(glue_object)
 	$(LD) -n --gc-sections -T $(linker_script) -o target/kernel.img \
 		$(stub_object) $(glue_object)  target/$(TARGET)/debug/libos.a $(LIB_COMPILER)
 
-build: cargo target/kernel.img
+target/kernel.raw: target/kernel.img
+	$(OBJCOPY) -O binary target/kernel.img target/kernel.raw
+
+build: cargo target/kernel.raw
 
 debugosx: build container
 	# qemu-system-arm -machine versatilepb -cpu arm1136 -m 128 -kernel target/kernel.img -s -S&

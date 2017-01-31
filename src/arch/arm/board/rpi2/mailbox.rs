@@ -66,6 +66,13 @@ impl LocalMailbox {
     }
 }
 
+pub enum MailboxIndex {
+    MailboxZero,
+    MailboxOne,
+    MailboxTwo,
+    MailboxThree,
+}
+
 pub struct CpuLocalMailbox {
     write : ::mem::VirtualAddress,
     read  : ::mem::VirtualAddress,
@@ -80,17 +87,20 @@ impl CpuLocalMailbox {
         }
     }
 
-    pub fn set_high(&self, num : usize, data : u32) {
+    pub fn set_high(&self, num : MailboxIndex, data : u32) {
+        let num = num as usize;
         let ptr: *mut u32 = self.write.uoffset(num*4).0 as *mut u32;
         unsafe { volatile_store(ptr, data) };
     }
 
-    pub fn read(&self, num : usize) -> u32{
+    pub fn read(&self, num : MailboxIndex) -> u32{
+        let num = num as usize;
         let ptr: *mut u32 = self.read.uoffset(num*4).0  as *mut u32;
         unsafe { volatile_load(ptr) }
     }
 
-    pub fn set_low(&self, num : usize, data : u32) {
+    pub fn set_low(&self, num : MailboxIndex, data : u32) {
+        let num = num as usize;
         let ptr: *mut u32 = self.read.uoffset(num*4).0  as *mut u32;
         unsafe { volatile_store(ptr, data) };
     }

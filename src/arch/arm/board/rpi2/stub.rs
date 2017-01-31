@@ -180,20 +180,9 @@ pub extern "C" fn stub_secondary_core() -> ! {
     cpu::set_ttb1(l1table_unsafe as *const ());
     cpu::set_ttbcr(0);
     cpu::enable_mmu();
+    cpu::invalidate_tlb();
 
     // We should now have access to the stack!
-unsafe {
-        asm!("mov sp, $1
-            b $0 "
-            :: 
-            "i"(super::rpi_multi_main as extern "C" fn() -> !),
-            "r"(super::current_stack)
-            : "sp" : "volatile"
-      )
-    }
+    super::rpi_multi_pre_main();
 
-
-    unsafe {
-        ::core::intrinsics::unreachable();
-    }
 }

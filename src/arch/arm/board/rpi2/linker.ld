@@ -2,7 +2,8 @@ OUTPUT_ARCH(arm)
 ENTRY(_start)
 SECTIONS
 {
-	. = 0x8000;
+	/* 0x0x8000 for physical pi, 0x10000 for qemu */
+	. = 0x10000;
 	_physical_begin = . ;
 	_begin =  . ;
     _stub_begin = .;

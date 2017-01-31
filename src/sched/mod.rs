@@ -30,14 +30,18 @@ impl Sched {
         Sched {
             // fake thread as this main thread..
             threads: sync::CpuMutex::new(vec![]),
-            thread_id_counter : atomic::AtomicUsize::new(10),
+            thread_id_counter : atomic::AtomicUsize::new(1000),
             time_since_boot_millies : RefCell::new(0),
         }
     }
 
     pub fn add_idle_thread_for_cpu(&mut self) {
+        self.add_idle_thread_for_cpu_id(platform::get_current_cpu_id())
+    }
+    
+    pub fn add_idle_thread_for_cpu_id(&mut self, id : usize) {
         let mut idle = Self::new_thread_obj(IDLE_THREAD_ID, platform::wait_for_interrupts );
-        idle.cpu_affinity = Some(platform::get_current_cpu_id());
+        idle.cpu_affinity = Some(id);
         idle.priority = 0;
         self.threads.lock().push(idle);
     }

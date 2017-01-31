@@ -3,6 +3,7 @@ use super::cpu;
 use platform;
 
 use collections::boxed::Box;
+use core::borrow::Borrow;
 
 // processor jumps to address 0 so must be ID mapper here for now, till (if?) if will relocate the vectors.
 // pub const VECTORS_ADDR : ::mem::VirtualAddress  = ::mem::VirtualAddress(0xea00_0000);
@@ -157,7 +158,8 @@ fn vector_table_asm() {
     };
 }
 
-// TODO change vec_table to point to the right place in memory
+// TODO change vec_table to point to the right place in 
+// TODO: make vectable not static and part of platform services.
 pub fn init_interrupts() {
     unsafe {
         let mut vec_table: &'static mut [u32] =
@@ -185,21 +187,21 @@ pub fn init_interrupts() {
     }
 }
 
-pub struct VectorTable {
+pub struct VectorTable<InterruptableT: Borrow<platform::Interruptable>> {
     // TODO re-write when we have a heap
-    irq_callback: Option<Box<platform::Interruptable>>,
+    irq_callback: Option<InterruptableT>,
 }
 
 // TODO: sync access to this or even better, to it lock free :)
-static mut VEC_TABLE: VectorTable = VectorTable { irq_callback: None };
+static mut VEC_TABLE: VectorTable<Box<platform::Interruptable>> = VectorTable { irq_callback: None };
 
 // TODO: make thread safe if multi processing !!
-pub fn get_vec_table() -> &'static mut VectorTable {
+pub fn get_vec_table() -> &'static mut VectorTable<Box<platform::Interruptable>> {
     unsafe { &mut VEC_TABLE }
 }
 
-impl VectorTable {
-    pub fn set_irq_callback(&mut self, callback: Box<platform::Interruptable>) {
+impl<InterruptableT: Borrow<platform::Interruptable>> VectorTable<InterruptableT> {
+    pub fn set_irq_callback(&mut self, callback: InterruptableT) {
         self.irq_callback = Some(callback);
     }
 }

@@ -17,5 +17,5 @@ pub use ::arch::arm::send_ipi;
 pub use ::arch::arm::get_num_cpus;
 
 pub type ArchPlatformServices = ::arch::arm::PlatformServices;
-
+pub type ArchCPUServices = ::arch::arm::CpuServices;
 pub use ::arch::arm::write_to_console;
