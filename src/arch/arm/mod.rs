@@ -12,54 +12,35 @@ pub use self::board::write_to_console;
 pub use self::board::ticks_in_second;
 pub use self::board::send_ipi;
 pub use self::board::CpuServices;
+pub use ::platform;
 
 pub fn get_num_cpus() -> usize {
     board::NUM_CPUS
 }
 
-pub fn build_mode_stacks(mapper: &mut ::mem::MemoryMapper,
-                         frame_allocator: &mut ::mem::FrameAllocator) {
-
-    const STACK_BASE: ::mem::VirtualAddress = ::mem::VirtualAddress(0xb000_0000);
-    const NUM_PAGES: usize = 1;
+pub fn build_mode_stacks() {
 
     let modes = [cpu::IRQ_MODE, cpu::ABRT_MODE, cpu::UNDEF_MODE, cpu::SYS_MODE];
 
-    for (i, m) in modes.iter().enumerate() {
-        // TODO allocate pages one by one from frame allocator, as
-        // we don't need them contiguous
-        let pa = frame_allocator.allocate(NUM_PAGES).unwrap();
-        let stack_start = STACK_BASE.uoffset(i << mem::PAGE_SHIFT);
-        let stack_end = stack_start.uoffset(NUM_PAGES << mem::PAGE_SHIFT); // one page size.
-        mapper.map(frame_allocator,
-                 pa,
-                 stack_start,
-                 ::mem::MemorySize::PageSizes(NUM_PAGES))
-            .unwrap();
-        cpu::set_stack_for_mode(*m, stack_end);
+    for m in modes.iter() {
+        cpu::set_stack_for_mode(*m,  ::thread::Thread::allocate_stack());
     }
 }
 
-fn init_vectors(mapper: &mut ::mem::MemoryMapper,
-                mut frame_allocator: &mut ::mem::FrameAllocator) {
-    mapper.map(frame_allocator,
+fn init_vectors() {
+    platform::get_platform_services().mem_manager.map(
              ::mem::PhysicalAddress(0),
              vector::VECTORS_ADDR,
              ::mem::MemorySize::PageSizes(1))
         .unwrap();
     vector::init_interrupts();
-    build_mode_stacks(mapper, frame_allocator);
+    build_mode_stacks();
 }
 
-pub fn arm_main<F>(mut mapper: self::mem::PageTable,
-                                          mut frame_allocator: F) -> !
+pub fn arm_main<F>( mapper: self::mem::PageTable,
+                                        frame_allocator: F) -> !
           where F : ::mem::FrameAllocator + 'static
                                            {
-    // init intr and build mode stacks
-    // TODO: add check if done, and do if not  build_mode_stacks(& mut mapper, &mut frame_allocator);
-
-    // init and map vector tables - we don't supposed to have to do this now, but it makes debugging easier..
-    init_vectors(&mut mapper, &mut frame_allocator);
 
     // DONE. install_interrupt_handlers();
     // DONE: init_timer
@@ -77,6 +58,12 @@ pub fn arm_main<F>(mut mapper: self::mem::PageTable,
     //   unsafe{asm!(".word 0xffffffff" :: :: "volatile");}
     let initplat = || {
 
+        // init intr and build mode stacks
+        // TODO: add check if done, and do if not  build_mode_stacks(& mut mapper, &mut frame_allocator);
+
+        // init and map vector tables - we don't supposed to have to do this now, but it makes debugging easier..
+        init_vectors();
+        
         let board_services = self::board::init_board();
 
         // init board

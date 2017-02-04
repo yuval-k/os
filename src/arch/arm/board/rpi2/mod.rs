@@ -13,6 +13,7 @@ use alloc::rc::Rc;
 use super::super::mem;
 use super::super::pic;
 use ::platform;
+use ::thread;
 use rlibc;
 
 use mem::MemoryMapper;
@@ -76,6 +77,28 @@ fn set_gpio_alt(gpio : u32, func : u32 ) {
     unsafe{volatile_store(ptr, (old_value & (!mask)) | ((func << bit) & mask))};
 }
 
+fn orr(v : ::mem::VirtualAddress, vl : u32) {
+
+    let ptr = (v.0) as *mut u32;
+
+    let old_value = unsafe{volatile_load(ptr)};
+    unsafe{volatile_store(ptr, old_value | vl)};
+
+}
+// http://www.valvers.com/open-software/raspberry-pi/step01-bare-metal-programming-in-cpt1/
+fn turn_led_on() {
+
+    let LED_GPFSEL   : usize =   4;
+    let LED_GPFBIT   : usize =   21;
+    let LED_GPSET    : usize =   8;
+    let LED_GPCLR    : usize =   10;
+    let LED_GPIO_BIT : usize =   15;
+
+    orr(GPIO_BASE.uoffset(4*LED_GPFSEL), 1 << LED_GPFBIT);
+    orr(GPIO_BASE.uoffset(4*LED_GPSET), 1 << LED_GPIO_BIT);
+}
+
+
 fn debug_release() -> bool {
     // deubgger attached will change this to true..
     return false;
@@ -105,7 +128,7 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
                                   l1table_id: usize,
                                   l2table_space_id: usize)
                                   -> ! {
-
+turn_led_on();
     // first thing - zero out the bss
     let bss_start =  &__bss_start as *const*const Ptr as *mut u8;
     let bss_end = &__bss_end as *const*const Ptr as *mut u8;
@@ -163,7 +186,11 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
 
 static mut serial_base: ::mem::VirtualAddress = ::mem::VirtualAddress(0);
 
+static serial_writer : ::sync::CpuMutex<()> = ::sync::CpuMutex::<()>::new(());
+ 
 pub fn write_to_console(s: &str) {
+    let lock = serial_writer.lock();
+
     serial::Writer::new(unsafe { serial_base }).writeln(s);
 }
 
@@ -213,7 +240,6 @@ pub fn init_board() -> PlatformServices {
 
     // TODO: by here we shouls assume scheduler is active.
 
-
     // for 1 .. (cpu-1):
     //    set stack for CPU
     //    do memory barrier()
@@ -239,6 +265,11 @@ pub fn init_board() -> PlatformServices {
         let corepic = Box::new(intr::CorePIC::new_for_cpu(i));
         corepic.enable(intr::Interrupts::Mailbox0 as usize);
         corepic.enable(intr::Interrupts::CNTVIRQ as usize);
+        corepic.disable(intr::Interrupts::GPU as usize);
+        corepic.disable(intr::Interrupts::PMU as usize);
+        corepic.disable(intr::Interrupts::AXI as usize);
+        corepic.disable(intr::Interrupts::LocalTimer as usize);
+
         let handle = pic.add_source( corepic ); //
         pic.register_callback_on_intr(handle, intr::Interrupts::Mailbox0 as usize, ipi_handler.clone());
         pic.register_callback_on_intr(handle, intr::Interrupts::CNTVIRQ as usize,timers[i].clone()); // dont init timer here, but from the cpecific cpu
@@ -265,16 +296,10 @@ pub fn init_board() -> PlatformServices {
 
 
     for i in 1 .. NUM_CPUS {
-
-        platform::get_mut_platform_services().scheduler.add_idle_thread_for_cpu_id(i);
-        // TODO: allocate stack instead of making up random values..
         
-        let pa = fa.allocate(1).unwrap();
-        // TODO - de uglyfy
-        let stk = ::mem::VirtualAddress(0x100_0000 + 0x1000*i);
-        mem_manager.map(pa, stk, ::mem::MemorySize::PageSizes(1)).unwrap();
+        let stk = ::thread::Thread::allocate_stack();
 
-        unsafe{current_stack = stk.0 + ::platform::PAGE_SIZE;}
+        unsafe{current_stack = stk.0;}
 
         ::arch::arm::cpu::memory_write_barrier();
 
@@ -323,6 +348,7 @@ struct InterHandler {
 
 impl platform::Interruptable for InterHandler {
     fn interrupted(&self, ctx: &mut platform::Context) {
+        self.pic.interrupted(ctx)
     }
 }
 
@@ -367,25 +393,32 @@ pub extern "C" fn rpi_multi_main() -> ! {
     // notify..
     CPUS_AWAKE.fetch_add(1, atomic::Ordering::SeqCst);
 
-    // TODO method for all CPUs:
-    // unmask mailbox interrupts (dedicate one mailbox to page table changes?)
-    // ??
+    // move this to arm_mp_start and call that fuction that will init innterrupt vectors stacks as well
+    // enable interrupts
+    super::super::build_mode_stacks();
 
+    // TODO TODO BUG: init interrupt stacks
     while ! platform::is_system_ready() {
     }
 
-    let tid = platform::ThreadId(::sched::MAIN_THREAD_ID.0 + platform::get_current_cpu_id());
-    platform::get_platform_services().get_current_cpu().set_running_thread(Box::new(::thread::Thread::new_cur_thread(tid)));
-
     let timers = & ::platform::get_platform_services().arch_services.as_ref().unwrap().board_services.timers;
-
     timers[::platform::get_current_cpu_id()].start_timer();
 
+    // make set current thread the idle loop in the current cpu
+    let tid = platform::ThreadId(::sched::MAIN_THREAD_ID.0 + platform::get_current_cpu_id());
+    let mut curth = thread::Thread::new_cur_thread(tid);
+    curth.cpu_affinity = Some(platform::get_current_cpu_id());
+    curth.priority = 0;
+    platform::get_platform_services().get_current_cpu().set_running_thread(Box::new(curth));
 
-    // enable interrupts
+
+
+
+
     platform::set_interrupts(true);
+    platform::get_platform_services().get_scheduler().yield_thread();
     loop {
-        platform::get_platform_services().get_scheduler().yield_thread();
+        platform::wait_for_interrupts();
     }
 
 }
@@ -408,6 +441,7 @@ pub extern "C" fn rpi_multi_pre_main() -> ! {
     // invalidate cache - as safety incase some code changed
     super::super::cpu::invalidate_caches(); 
 
+    // change to main stack
     unsafe {
         asm!("mov sp, $1
             b $0 "

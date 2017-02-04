@@ -58,12 +58,13 @@ extern "C" fn switch_context2(current_context: *mut Context, new_context: *const
     unsafe {
         asm!("
             switch_context3:
+            /* if no previous thread, don't save it */
             cmp r0, #0
             beq 1f
-            /* store all regs in the stack - cause we can!  */
+            /* store all regs in the stack - cause we can! */
             push {r4-r12,r14}
             /* save to r0, restore from r1 */
-            /* TODO : might not need to save cspr, as this should always happen from the same mode */
+            /* TODO : might not need to save cspr, as this should always happen from the same mode (kernel mode) */
 
             /* old context saved! */
 

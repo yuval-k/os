@@ -14,7 +14,7 @@ unsafe impl<T: ?Sized + Send> Sync for CpuMutex<T> {}
 unsafe impl<T: ?Sized + Send> Send for CpuMutex<T> {}
 
 impl<T> CpuMutex<T> {
-    pub fn new(user_data: T) -> Self {
+    pub const fn new(user_data: T) -> Self {
         CpuMutex{
             owner : atomic::AtomicIsize::new(-1),
             recursion : Cell::new(0),
@@ -57,8 +57,10 @@ impl<T: ?Sized> CpuMutex<T> {
 
     fn release_lock(&self) {
         let curcpu = ::platform::get_current_cpu_id() as isize;
-        if self.owner.load(atomic::Ordering::Acquire) != curcpu {
+        let lockedcpu = self.owner.load(atomic::Ordering::Acquire);
+        if lockedcpu != curcpu {
             // this is a bug!
+            panic!("cpu release lock owner mismatch!")
         }
         self.recursion.set(self.recursion.get() - 1);
             if self.recursion.get() > 0 {

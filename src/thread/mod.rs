@@ -7,17 +7,16 @@ use collections::boxed::Box;
 use alloc::boxed::FnBox;
 use core::cell::RefCell;
 
+pub enum RunState {
+    Ready,
+    WakeOn(usize),
+    Never,
+}
+
 pub struct Thread {
     pub ctx: super::platform::ThreadContext,
-    pub ready: bool,
+    pub run_state: RunState,
     pub id: ThreadId,
-    pub wake_on: u64, /* TODO:
-                   *
-                   * wake_on: u32,
-                   * id: u32,
-                   * owns: Vec<u32>,
-                   * blocks_on: u32,
-                   * */
     pub func : RefCell<Option<Box<FnBox()>>>,
     pub cpu_affinity: Option<usize>,
     pub priority: usize,
@@ -35,7 +34,7 @@ impl Thread {
         // TODO: we leak the stack :-(
     }
 
-    fn allocate_stack() -> ::mem::VirtualAddress {
+    pub fn allocate_stack() -> ::mem::VirtualAddress {
         let oldcounter = STACK_BASE_COUNTER.fetch_add(STACK_SIZE, atomic::Ordering::SeqCst);
         let stack_start = STACK_BASE.uoffset(oldcounter);
         let stack_end   = stack_start.uoffset(STACK_SIZE);
@@ -54,29 +53,30 @@ impl Thread {
     pub fn new(id : ThreadId, f: Box<FnBox()>) -> Self {
         Thread {
             ctx: platform::new_thread(Thread::allocate_stack()),
-            ready: true,
+            run_state: RunState::Ready,
             id: id,
-            wake_on: 0,
             func : RefCell::new(Some(f)),
             cpu_affinity: None,
             priority: 1,
         }
     }
 
+    pub fn is_ready(&self) -> bool {
+        if let RunState::Ready = self.run_state {
+            return true;
+        };
+        false
+    }
+
     pub fn new_cur_thread(id : ThreadId) -> Self {
         Thread{
                     ctx : platform::new_thread(::mem::VirtualAddress(0)),
-                    ready: true,
+                    run_state: RunState::Ready,
                     id : id,
-                    wake_on: 0,
                     func : RefCell::new(None),
                     cpu_affinity: None,
                     priority: 1,
         }
-    }
-
-    fn exit(&self) {
-        // free myself
     }
 }
 

@@ -7,7 +7,6 @@ pub const DATA_REG_OFFSET : usize = 0;
 pub const FLAG_REG_OFFSET : usize = 0x18;
 pub const UARTFR_TXFE : u32 = 1 << 7;
 
-
 pub struct Writer {
     base: *mut u8,
 }

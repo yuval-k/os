@@ -206,7 +206,13 @@ impl<InterruptableT: Borrow<platform::Interruptable>> VectorTable<InterruptableT
     }
 }
 
-fn vector_reset_handler(_: &mut InterruptContext) {
+fn vector_reset_handler(ctx: &mut InterruptContext) {
+    use collections::String;
+    use core::fmt::Write;
+    platform::write_to_console("reset interrupt!");
+    let mut w = String::new();
+    write!(&mut w, "Context: {:?}", ctx);
+    platform::write_to_console(&w);
 
     // TODO : call scheduler
     loop {}
@@ -227,11 +233,24 @@ fn vector_undefined_handler(ctx: &mut InterruptContext) {
     loop {}
 }
 
-fn vector_softint_handler(_: &mut InterruptContext) {
+fn vector_softint_handler(ctx: &mut InterruptContext) {
+    use collections::String;
+    use core::fmt::Write;
+    platform::write_to_console("softint handler!");
+    let mut w = String::new();
+    write!(&mut w, "Context: {:?}", ctx);
+    platform::write_to_console(&w);
     loop {}
 }
 
-fn vector_prefetch_abort_handler(_: &mut InterruptContext) {
+fn vector_prefetch_abort_handler(ctx: &mut InterruptContext) {
+    use collections::String;
+    use core::fmt::Write;
+    platform::write_to_console("prefetch abort!");
+    let mut w = String::new();
+    write!(&mut w, "Context: {:?}", ctx);
+    platform::write_to_console(&w);
+
     loop {}
 }
 
@@ -259,6 +278,12 @@ fn vector_irq_handler(ctx: &mut InterruptContext) {
     }
 }
 
-fn vector_fiq_handler(_: &mut InterruptContext) {
+fn vector_fiq_handler(ctx: &mut InterruptContext) {
+    use collections::String;
+    use core::fmt::Write;
+    platform::write_to_console("fiq interrupt!");
+    let mut w = String::new();
+    write!(&mut w, "Context: {:?}", ctx);
+    platform::write_to_console(&w);
     loop {}
 }

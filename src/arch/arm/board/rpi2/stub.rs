@@ -13,10 +13,83 @@ extern "C" {
     fn l2pagetable_glue() -> *const usize;
 }
 // setup virtual table and jump to rust main
+#[inline(always)]
+fn write_byte_async(b: u8) {
+    use core::intrinsics::volatile_store;
+
+    let ptr: *mut u8;
+    ptr = (0x3f000000 + 0x0020_1000 + 0x0) as *mut u8;
+    unsafe {
+        volatile_store(ptr, b);
+    }
+}
+
+#[inline(always)]
+fn is_done() -> bool {
+    use core::intrinsics::volatile_load;
+
+    let ptr: *const u32 = (0x3f000000 + 0x0020_1000 + 0x18) as *const u32;
+    return (unsafe { volatile_load(ptr) } & ( 1 << 7)) != 0;
+}
+
+
+#[inline(always)]
+fn orr(v : usize, vl : u32) {
+
+    use core::intrinsics::{volatile_store, volatile_load};
+    
+    let ptr = v as *mut u32;
+
+    let old_value = unsafe{volatile_load(ptr)};
+    unsafe{volatile_store(ptr, old_value | vl)};
+
+}
+
+// http://www.valvers.com/open-software/raspberry-pi/step01-bare-metal-programming-in-cpt1/
+
+#[link_section=".stub"]
+fn turn_led_on() {
+
+    let LED_GPFSEL   : usize =   4;
+    let LED_GPFBIT   : usize =   21;
+    let LED_GPSET    : usize =   8;
+    let LED_GPCLR    : usize =   10;
+    let LED_GPIO_BIT : usize =   15;
+
+    orr(0x3f000000 + 0x20_0000 + (4*LED_GPFSEL), 1 << LED_GPFBIT);
+    loop {
+        orr(0x3f000000 + 0x20_0000 + (4*LED_GPSET), 1 << LED_GPIO_BIT);
+        let mut i = 1000_000;
+        while i != 0 {
+            i -= 1;
+        }
+        orr(0x3f000000 + 0x20_0000 + (4*LED_GPCLR), 1 << LED_GPIO_BIT);
+        let mut i = 1000_000;
+        while i != 0 {
+            i -= 1;
+        }
+    }
+}
+
 
 #[no_mangle]
 #[link_section=".stub"]
 pub extern "C" fn stub_main() -> ! {
+    write_byte_async('A' as u8);
+    while !is_done() {}
+    write_byte_async('A' as u8);
+    while !is_done(){}
+    write_byte_async('A' as u8);
+    while !is_done(){}
+    write_byte_async('A' as u8);
+    while !is_done(){}
+    write_byte_async('A' as u8);
+    while !is_done(){}  
+    write_byte_async('A' as u8);
+    while !is_done(){}
+    write_byte_async('\n' as u8);
+    while !is_done(){}
+    
     // goal of this function is to setup correct virtual table for kernel and then jump to it.
     // the kernel should cleanup the stub functions afterwards.
 
@@ -137,7 +210,8 @@ pub extern "C" fn stub_main() -> ! {
     cpu::enable_mmu();
 
     // TODO: should we do a data sync barrier here?
-
+ turn_led_on();
+   
     // now switch stack and call arm main:
     unsafe {
         asm!("mov sp, $1
@@ -182,7 +256,6 @@ pub extern "C" fn stub_secondary_core() -> ! {
     cpu::enable_mmu();
     cpu::invalidate_tlb();
 
-    // We should now have access to the stack!
     super::rpi_multi_pre_main();
 
 }

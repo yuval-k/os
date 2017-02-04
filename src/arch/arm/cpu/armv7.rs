@@ -80,11 +80,7 @@ pub fn enable_fpu() {
 #[naked]
 pub fn wait_for_interrupts() {
     unsafe {
-        asm!("loop:
-            wfi
-            b loop
-            "::::"volatile"
-            )
+        asm!("wfi"::::"volatile");
     }
 }
 

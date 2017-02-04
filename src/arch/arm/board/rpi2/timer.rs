@@ -18,7 +18,7 @@ impl GlobalTimer {
 
 	pub fn new() -> Self {
 		GlobalTimer{
-			time : 10000
+			time : 1_000_000
 		}
 	}
 
@@ -26,7 +26,6 @@ impl GlobalTimer {
 		cpu::write_cntv_tval(self.time);
 
 		cpu::write_cntv_ctl(TIMER_CONTROL_ENABLE);
-	//	cpu::write_cntp_ctl(TIMER_CONTROL_ENABLE);
 	}
 }
 

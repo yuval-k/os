@@ -65,6 +65,7 @@ target/kernel.img: $(os_lib) $(linker_script) $(stub_object) $(glue_object)
 
 target/kernel.raw: target/kernel.img
 	$(OBJCOPY) -O binary target/kernel.img target/kernel.raw
+	cp target/kernel.raw target/kernel7.img
 
 build: cargo target/kernel.raw
 

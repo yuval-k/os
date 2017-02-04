@@ -9,7 +9,7 @@
 
 // TODO: delete
 #![feature(drop_types_in_const)]
-
+#![feature(const_fn)]
 #![feature(fnbox)]
 
 #[macro_use]
@@ -39,7 +39,7 @@ use alloc::arc::Arc;
 
 fn init_heap(mapper: &mut ::mem::MemoryMapper, frame_allocator: &mut ::mem::FrameAllocator) {
     const HEAP_BASE: ::mem::VirtualAddress = mem::VirtualAddress(0xf000_0000);
-    const HEAP_SIZE: mem::MemorySize = mem::MemorySize::MegaBytes(4); // 4mb heap
+    const HEAP_SIZE: mem::MemorySize = mem::MemorySize::MegaBytes(40); // 4mb heap
     let pa = frame_allocator.allocate(mem::to_pages(HEAP_SIZE).ok().unwrap()).unwrap();
     mapper.map(frame_allocator, pa, HEAP_BASE, HEAP_SIZE).unwrap();
     kernel_alloc::init_heap(HEAP_BASE.0,
@@ -82,22 +82,73 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
     }
 
     // set current thread
-    platform::get_platform_services().get_current_cpu().set_running_thread(Box::new(thread::Thread::new_cur_thread(sched::MAIN_THREAD_ID)));
+    let mut curth = thread::Thread::new_cur_thread(sched::MAIN_THREAD_ID);
+    curth.cpu_affinity = Some(platform::get_current_cpu_id());
+    curth.priority = 0;
+    platform::get_platform_services().get_current_cpu().set_running_thread(Box::new(curth));
 
 
     // TODO add the sched interrupt back, to be explicit
-    platform::get_mut_platform_services().scheduler.add_idle_thread_for_cpu();
     let arch_plat_services = init_platform();
 
-    unsafe{
-        platform::get_mut_platform_services().arch_services = Some(arch_plat_services);
-    }
+    platform::get_mut_platform_services().arch_services = Some(arch_plat_services);
+
     // scheduler is ready ! we can use sync objects!
 
     // platform services is fully initialized, so we can start processing IPIs and the such..
     platform::set_system_ready();
     // enable interrupts!
     platform::set_interrupts(true);
+
+
+    // let stack2: ::mem::VirtualAddress = ::mem::VirtualAddress(0xDF00_0000);
+    // let pa = frame_allocator.allocate(1).unwrap();
+    // mapper.map(&mut frame_allocator,
+    // pa,
+    // stack2,
+    // mem::MemorySize::PageSizes(1))
+    // .unwrap();
+    // platform::get_platform_services()
+    // .get_scheduler()
+    // .spawn(stack2.uoffset(platform::PAGE_SIZE), t1);
+    //
+    
+    // to do:
+    // create idle thread with lowest priority, that just does wait_for_interurpts
+    // create isr thread with highest priority that responds to interrupts. (need semaphore for that..)
+
+    platform::get_platform_services()
+        .get_scheduler()
+        .spawn(move || {
+            main_thread();
+        });
+
+
+    platform::get_platform_services().get_scheduler().yield_thread();
+    loop {
+        platform::wait_for_interrupts();
+    }
+
+
+    // turn on identity map for a lot of bytes
+    //   tun_on_identity_map()
+    //   build_virtual_table() // we need phy2virt; we need frame alocator with ranges;
+    //   flush_mem_and_switch_table()
+    // turn on virtual memory and map kernel
+
+    // fix page table and jump to virtual main.
+
+    // let mut w : &mut devserial::SerialMMIO = &mut serial::Writer::new();
+    // w.write_byte('Y' as u8);
+    // w.write_byte('u' as u8);
+    // w.write_byte('v' as u8);
+    // w.write_byte('a' as u8);
+    // w.write_byte('l' as u8);
+    //
+}
+
+
+fn main_thread() {
 
     // sema
     let sema = Arc::new(sync::Semaphore::new(1));
@@ -110,6 +161,7 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
             .get_scheduler()
             .spawn(move || {
                 loop {
+                    platform::write_to_console("t1 started");
                     sema.acquire();
                     platform::get_platform_services().get_scheduler().sleep(1000);
                     sema.release();
@@ -137,44 +189,6 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
                 }
             });
     }
-
-    // let stack2: ::mem::VirtualAddress = ::mem::VirtualAddress(0xDF00_0000);
-    // let pa = frame_allocator.allocate(1).unwrap();
-    // mapper.map(&mut frame_allocator,
-    // pa,
-    // stack2,
-    // mem::MemorySize::PageSizes(1))
-    // .unwrap();
-    // platform::get_platform_services()
-    // .get_scheduler()
-    // .spawn(stack2.uoffset(platform::PAGE_SIZE), t1);
-    //
-    
-    // to do:
-    // create idle thread with lowest priority, that just does wait_for_interurpts
-    // create isr thread with highest priority that responds to interrupts. (need semaphore for that..)
-
-
-    loop {
-        platform::get_platform_services().get_scheduler().block();
-    }
-
-
-    // turn on identity map for a lot of bytes
-    //   tun_on_identity_map()
-    //   build_virtual_table() // we need phy2virt; we need frame alocator with ranges;
-    //   flush_mem_and_switch_table()
-    // turn on virtual memory and map kernel
-
-    // fix page table and jump to virtual main.
-
-    // let mut w : &mut devserial::SerialMMIO = &mut serial::Writer::new();
-    // w.write_byte('Y' as u8);
-    // w.write_byte('u' as u8);
-    // w.write_byte('v' as u8);
-    // w.write_byte('a' as u8);
-    // w.write_byte('l' as u8);
-    //
 }
 
 
@@ -193,12 +207,4 @@ extern "C" fn rust_begin_unwind(fmt: core::fmt::Arguments, file: &str, line: u32
     platform::write_to_console(&w);
     
     loop {}
-}
-
-
-fn t1() {
-    loop {
-
-        platform::write_to_console("t1");
-    }
 }

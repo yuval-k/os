@@ -4,7 +4,7 @@ use core::cell::RefCell;
 use platform;
 
 pub struct Semaphore {
-    sema: super::CpuMutex<platform::intr::InterruptGuard<SemaphoreImpl>>,
+    sema: platform::intr::InterruptGuard<super::CpuMutex<SemaphoreImpl>>,
 }
 
 unsafe impl Sync for Semaphore {}
@@ -25,7 +25,7 @@ struct SemaphoreImpl {
 impl Semaphore {
     pub fn new(count: usize) -> Semaphore {
         Semaphore {
-            sema: super::CpuMutex::new(platform::intr::InterruptGuard::new(SemaphoreImpl {
+            sema: platform::intr::InterruptGuard::new(super::CpuMutex::new(SemaphoreImpl {
                 waiting: RefCell::new(VecDeque::new()),
                 counter: Cell::new(count),
             })),
@@ -40,8 +40,8 @@ impl Semaphore {
         {
         // make the cpu lock as short as possible.
         // we can't place a cpu mutex on block 
-            let locked = self.sema.lock();
-            ret = locked.no_interrupts().acquire();
+            let locked = self.sema.no_interrupts();
+            ret = locked.lock().acquire();
         }
 
         if ret {
@@ -58,8 +58,8 @@ impl Semaphore {
         // tell the scheduler that the current thread is waking
         // for (n-counter) units to arrive.
         {
-            let locked = self.sema.lock();
-            locked.no_interrupts().release();
+            let locked = self.sema.no_interrupts();
+            locked.lock().release();
         }
     }
 

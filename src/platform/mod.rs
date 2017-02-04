@@ -69,6 +69,9 @@ impl PlatformServices {
 
     pub fn clock(&self) {
         // TODO: move to scheduler to decide
+        if get_current_cpu_id() == 0 {
+            self.scheduler.clock();
+        }
         self.get_current_cpu().should_resched.set(true);
     }
 
