@@ -4,17 +4,19 @@ RUN apt-get update && apt-get install -y autoconf libtool libftdi-dev git gcc pk
 
 RUN cd /opt/ && \
     git clone --recursive git://git.code.sf.net/p/openocd/code openocd-git
-
+    
+# thanks https://github.com/synthetos/PiOCD/wiki/Using-a-Raspberry-Pi-as-a-JTAG-Dongle
 RUN cd /opt/openocd-git && \
     ./bootstrap && \
     ./configure --enable-sysfsgpio \
          --enable-maintainer-mode \
          --disable-werror \
-          --enable-ftdi \
+         --enable-ftdi \
          --enable-ep93xx \
          --enable-at91rm9200 \
          --enable-usbprog \
          --enable-presto_libftdi \
+         --enable-bcm2835gpio \
          --enable-jlink \
          --enable-vsllink \
          --enable-rlink \
@@ -24,7 +26,6 @@ RUN cd /opt/openocd-git && \
          --enable-ulink \
          --enable-presto_libftdi \
          --enable-usb_blaster_libftdi \
-         --prefix=/usr \
     && \
     make && make install
 

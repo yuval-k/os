@@ -1,0 +1,2 @@
+telnet_port 4444
+gdb_port 3333

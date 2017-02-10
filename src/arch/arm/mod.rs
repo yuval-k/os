@@ -11,7 +11,6 @@ pub mod pic;
 pub use self::board::write_to_console;
 pub use self::board::ticks_in_second;
 pub use self::board::send_ipi;
-pub use self::board::CpuServices;
 pub use ::platform;
 
 pub fn get_num_cpus() -> usize {

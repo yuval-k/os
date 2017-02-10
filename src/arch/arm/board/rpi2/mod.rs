@@ -113,9 +113,7 @@ fn enable_debugger() {
 	set_gpio_alt(25, GPIO_ALT_FUNCTION_4);
 	set_gpio_alt(23, GPIO_ALT_FUNCTION_4);
 	set_gpio_alt(24, GPIO_ALT_FUNCTION_4);
-    write_to_console("Debugger enabled!");
-    
-    while !debug_release() {
+    loop {
     }
 }
 
@@ -128,7 +126,7 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
                                   l1table_id: usize,
                                   l2table_space_id: usize)
                                   -> ! {
-turn_led_on();
+
     // first thing - zero out the bss
     let bss_start =  &__bss_start as *const*const Ptr as *mut u8;
     let bss_end = &__bss_end as *const*const Ptr as *mut u8;
@@ -439,7 +437,7 @@ pub extern "C" fn rpi_multi_pre_main() -> ! {
     // flush tlb
     super::super::cpu::invalidate_tlb();
     // invalidate cache - as safety incase some code changed
-    super::super::cpu::invalidate_caches(); 
+    super::super::cpu::flush_caches(); 
 
     // change to main stack
     unsafe {

@@ -2,6 +2,19 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "type": "gdb",
+            "request": "attach",
+            "remote": true,
+            "name": "Attach to ocd",
+            "executable": "./target/kernel.elf",
+            "target": "192.168.1.20:3333",
+            "cwd": "${workspaceRoot}",
+            "gdbpath": "${workspaceRoot}/gdb-native",
+            "autorun": [
+                "symbol-file ./target/kernel.elf"
+            ]
+        },
+        {
             "name": "Attach to QEMU",
             "type": "gdb",
             "request": "attach",

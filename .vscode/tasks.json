@@ -14,7 +14,7 @@
         {
             "taskName": "build",
             "args": [
-                "BOARD=rpi2"
+                "BOARD=rpi"
             ],
             "isBuildCommand": true,
             "problemMatcher": {
