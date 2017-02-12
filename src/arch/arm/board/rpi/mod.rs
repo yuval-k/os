@@ -1,5 +1,7 @@
 pub mod serial;
 pub mod stub;
+pub mod intr;
+pub mod spi;
 
 use core;
 use core::sync::atomic;
@@ -20,8 +22,6 @@ use device::serial::SerialMMIO;
 use arch::arm::pic::InterruptSource;
 
 pub const ticks_in_second : usize = 20;
-pub const NUM_CPUS : usize = 1;
-
 
 static mut current_stack : usize = 0;
 static mut current_page_table: *const () = 0 as  *const ();
@@ -55,7 +55,7 @@ extern "C" {
     
 }
 
-const GPIO_BASE : ::mem::VirtualAddress = ::mem::VirtualAddress(MMIO_VSTART.0 + 0x200000);
+const GPIO_BASE : ::mem::VirtualAddress = ::mem::VirtualAddress(MMIO_VSTART.0 + 0x20_0000);
 
 // thanks http://sysprogs.com/VisualKernel/tutorials/raspberry/jtagsetup/
 fn set_gpio_alt(gpio : u32, func : u32 ) {
@@ -147,7 +147,6 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
     let mut frame_allocator =
         mem::LameFrameAllocator::new(&skip_ranges, 1 << 27);
 
-    // TODO support sending IPIs to other CPUs when page mapping changes so they can flush tlbs.
     let page_table = mem::init_page_table(::mem::VirtualAddress(l1table_id),
                                               ::mem::VirtualAddress(l2table_space_id),
                                               &ml,
@@ -190,24 +189,30 @@ pub struct PlatformServices {
 
 
 
-extern {
-    fn _secondary_start () -> !;
-}
-
 // This function should be called when we have a heap and a scheduler.
 // TODO make sure we have a scheduler..
 pub fn init_board() -> PlatformServices {
-   
-   // let interrupts = InterHandler{pic:pic};
+    
+    
+    let mut pic : pic::PIC< Box<pic::InterruptSource> , Rc<platform::Interruptable> > = pic::PIC::new();
 
-    // super::super::vector::get_vec_table().set_irq_callback(Box::new(interrupts));
+    register_interrupts(&mut pic);
+  
 
-  //  timers[0].start_timer();
-    // TODO: scheduler should be somewhat available here..
-    // TODO: setup gtmr
-    // TODO: setup mailbox interrupts to cpus ipi handler
+    let interrupts = InterHandler{pic:pic};
+    super::super::vector::get_vec_table().set_irq_callback(Box::new(interrupts));
+
     PlatformServices{
     }
+}
+
+pub fn register_interrupts(pic : &mut pic::PIC< Box<pic::InterruptSource> , Rc<platform::Interruptable> > ) {
+  let handle = pic.add_source(Box::new(self::intr::PICDev::new()));
+
+  // TODO add timer
+
+//    pic.register_callback_on_intr(handle, intr::Interrupts::SPI, );
+
 }
 
 struct InterHandler {

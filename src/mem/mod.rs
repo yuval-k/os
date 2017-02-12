@@ -39,20 +39,20 @@ pub struct VirtualAddress(pub usize);
 pub struct PhysicalAddress(pub usize);
 
 impl VirtualAddress {
-    pub fn offset(&self, off: isize) -> VirtualAddress {
+    pub const fn offset(&self, off: isize) -> VirtualAddress {
         VirtualAddress((self.0 as isize + off) as usize)
     }
 
-    pub fn uoffset(&self, off: usize) -> VirtualAddress {
+    pub const fn uoffset(&self, off: usize) -> VirtualAddress {
         VirtualAddress(self.0 + off)
     }
 }
 
 impl PhysicalAddress {
-    pub fn offset(&self, off: isize) -> PhysicalAddress {
+    pub const fn offset(&self, off: isize) -> PhysicalAddress {
         PhysicalAddress((self.0 as isize + off) as usize)
     }
-    pub fn uoffset(&self, off: usize) -> PhysicalAddress {
+    pub const fn uoffset(&self, off: usize) -> PhysicalAddress {
         PhysicalAddress(self.0 + off)
     }
 }

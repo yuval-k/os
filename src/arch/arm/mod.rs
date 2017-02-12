@@ -7,14 +7,20 @@ pub mod mem;
 pub mod cpu;
 pub mod thread;
 pub mod pic;
+pub mod pl011;
 
 pub use self::board::write_to_console;
 pub use self::board::ticks_in_second;
 pub use self::board::send_ipi;
 pub use ::platform;
 
+#[cfg(multicpu)]
 pub fn get_num_cpus() -> usize {
     board::NUM_CPUS
+}
+#[cfg(not(multicpu))]
+pub fn get_num_cpus() -> usize {
+    1
 }
 
 pub fn build_mode_stacks() {

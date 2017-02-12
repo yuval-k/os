@@ -18,6 +18,7 @@ extern crate alloc;
 extern crate spin;
 extern crate rlibc;
 extern crate kernel_alloc;
+extern crate volatile;
 
 #[macro_use]
 extern crate bitflags;
@@ -30,6 +31,7 @@ pub mod sync;
 pub mod thread;
 pub mod platform;
 pub mod cpu;
+pub mod io;
 
 
 use collections::boxed::Box;

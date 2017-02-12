@@ -383,6 +383,7 @@ pub fn init_page_table(l1table_identity: ::mem::VirtualAddress,
     cpu::memory_write_barrier();
     cpu::flush_caches();
     cpu::invalidate_tlb();
+    // TODO: if loading code, need to do an ISB (on arm)
 
     // our blank l1 and l2 mapped pages should be available now.
     let mut newl1 = unsafe { L1Table::from_virt_address_init(L1_VIRT_ADDRESS) };

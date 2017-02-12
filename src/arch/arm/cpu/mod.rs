@@ -36,6 +36,7 @@ pub fn memory_write_barrier() {
 pub fn memory_read_barrier() {
     data_memory_barrier();
     data_synchronization_barrier();
+  //  flush_caches(); not sure this is needed
 }
 
 #[inline(always)]
@@ -226,6 +227,7 @@ pub fn set_interrupts(b: bool) {
     }
 }
 
+// true -> means interrupts are enabled.
 pub fn get_interrupts() -> bool {
     (get_cpsr() & (DISABLE_IRQ | DISABLE_IRQ)) == 0
 }

@@ -71,10 +71,59 @@ fn turn_led_on() {
     }
 }
 
+#[inline(always)]
+fn enbable_jtag( ) {
+
+    use core::intrinsics::{volatile_store, volatile_load};
+    const SYSTIMERCLO : *mut u32 = 0x3F00_3004 as *mut u32;
+    const GPFSEL0     : *mut u32 = 0x3F20_0000 as *mut u32;
+    const GPFSEL1     : *mut u32 = 0x3F20_0004 as *mut u32;
+    const GPFSEL2     : *mut u32 = 0x3F20_0008 as *mut u32;
+    const GPSET0      : *mut u32 = 0x3F20_001C as *mut u32;
+    const GPCLR0      : *mut u32 = 0x3F20_0028 as *mut u32;
+    const GPPUD       : *mut u32 = 0x3F20_0094 as *mut u32;
+    const GPPUDCLK0   : *mut u32 = 0x3F20_0098 as *mut u32;
+
+        //alt4 = 0b011 3
+        //alt5 = 0b010 2
+
+        let mut ra : u32 = 0;
+
+        unsafe {
+            volatile_store(GPPUD,0);
+            while ra<150 { ra += 1;};
+        
+            volatile_store(GPPUDCLK0,(1<<4)|(1<<22)|(1<<24)|(1<<25)|(1<<27));
+            ra = 0;
+            while ra<150 { ra += 1;};
+            
+            volatile_store(GPPUDCLK0,0);
+
+            ra=volatile_load(GPFSEL0);
+            ra&=!(7<<12); //gpio4
+            ra|=2<<12; //gpio4 alt5 ARM_TDI
+            volatile_store(GPFSEL0,ra);
+
+            ra=volatile_load(GPFSEL2);
+            ra&=!(7<<6); //gpio22
+            ra|=3<<6; //alt4 ARM_TRST
+            ra&=!(7<<12); //gpio24
+            ra|=3<<12; //alt4 ARM_TDO
+            ra&=!(7<<15); //gpio25
+            ra|=3<<15; //alt4 ARM_TCK
+            ra&=!(7<<21); //gpio27
+            ra|=3<<21; //alt4 ARM_TMS
+            volatile_store(GPFSEL2,ra);
+        }
+}
+
 
 #[no_mangle]
 #[link_section=".stub"]
 pub extern "C" fn stub_main() -> ! {
+    cpu::enable_fpu();
+
+    /*
     write_byte_async('A' as u8);
     while !is_done() {}
     write_byte_async('A' as u8);
@@ -89,7 +138,7 @@ pub extern "C" fn stub_main() -> ! {
     while !is_done(){}
     write_byte_async('\n' as u8);
     while !is_done(){}
-    
+    */
     // goal of this function is to setup correct virtual table for kernel and then jump to it.
     // the kernel should cleanup the stub functions afterwards.
 
@@ -195,10 +244,9 @@ pub extern "C" fn stub_main() -> ! {
 
     // write barrier probably not needed but just in case..
     cpu::memory_write_barrier();
-    cpu::invalidate_caches();
+    cpu::flush_caches();
     cpu::invalidate_tlb();
 
-    cpu::enable_fpu();
     // disable access checks for domain 0
     // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0344k/I1001599.html
     cpu::write_domain_access_control_register(3);
@@ -210,7 +258,6 @@ pub extern "C" fn stub_main() -> ! {
     cpu::enable_mmu();
 
     // TODO: should we do a data sync barrier here?
- turn_led_on();
    
     // now switch stack and call arm main:
     unsafe {

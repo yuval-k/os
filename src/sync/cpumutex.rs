@@ -4,6 +4,8 @@ use core::ops::{Drop, Deref, DerefMut};
 use core::marker::Sync;
 use core::cell::{UnsafeCell,Cell};
 
+use platform;
+
 pub struct CpuMutex<T: ?Sized>{
     owner : atomic::AtomicIsize,
     recursion : Cell<usize>,
@@ -39,11 +41,15 @@ impl<T: ?Sized> CpuMutex<T> {
     }
 
     fn obtain_lock(&self) {
+        if ::platform::get_interrupts() {
+            panic!("can't use cpu mutex when interrupts are enabled")
+        }
         let curcpu = ::platform::get_current_cpu_id() as isize;
         if self.owner.load(atomic::Ordering::Acquire) == curcpu {
             self.recursion.set(self.recursion.get() + 1);
             return
         }
+        platform::memory_read_barrier();
 
         while self.owner.compare_and_swap(-1, curcpu, atomic::Ordering::AcqRel) != -1  {
             // Wait until the lock looks unlocked before retrying
@@ -66,6 +72,8 @@ impl<T: ?Sized> CpuMutex<T> {
             if self.recursion.get() > 0 {
                 return
         }
+
+        platform::memory_write_barrier();
         self.owner.store(-1, atomic::Ordering::Release)
         
     }

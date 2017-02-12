@@ -8,6 +8,7 @@ authors = ["Kohavi, Yuval <yuval.kohavi@gmail.com>"]
 rlibc = "1.0.0"
 bitflags = "0.7.0"
 spin = "0.4.4"
+volatile = "0.2.3"
 
 [dependencies.kernel_alloc]
 path = "lib/kernel_alloc"

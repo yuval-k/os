@@ -45,8 +45,8 @@ impl CPU {
 
     pub fn interrupted(&self, ipi : IPI) {
         match ipi {
-            MEM_CHANGED => ::platform::invalidate_tlb(),
-            // SCHED_CHANGED => if on idle thread - yeild();
+            IPI::MEM_CHANGED => ::platform::invalidate_tlb(),
+            IPI::SCHED_CHANGED => /* if on idle thread - yeild();*/{} ,
         }
         
     }
