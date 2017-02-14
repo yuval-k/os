@@ -34,27 +34,25 @@ pub struct PlatformServices {
 
 }
 
-static mut platform_services: Option<UnsafeCell<PlatformServices>> = None;
+static mut PLATFORM_SERVICES: Option<UnsafeCell<PlatformServices>> = None;
 
 pub unsafe fn set_platform_services(p: PlatformServices) {
-      platform_services = Some(UnsafeCell::new(p));
+      PLATFORM_SERVICES = Some(UnsafeCell::new(p));
 }
 
 pub fn get_platform_services() -> &'static PlatformServices {
     unsafe {
-        match platform_services {
+        match PLATFORM_SERVICES {
             Some(ref x) => &*x.get(),
             None => panic!("platform services are note INITIALIZED!"),
         }
     }
 }
 
-pub fn get_mut_platform_services() -> &'static mut PlatformServices {
-    unsafe {
-        match platform_services {
-            Some(ref x) => &mut *x.get(),
-            None => panic!(),
-        }
+pub unsafe fn get_mut_platform_services() -> &'static mut PlatformServices {
+    match PLATFORM_SERVICES {
+        Some(ref x) => &mut *x.get(),
+        None => panic!(),
     }
 }
 
@@ -76,7 +74,7 @@ impl PlatformServices {
     }
 
     // called with interrupts disabled..
-    pub fn post_interrupted(&self, ctx : &mut Context) {
+    pub fn post_interrupted(&self, _ : &mut Context) {
         if self.get_current_cpu().should_resched.get() {
             self.get_current_cpu().should_resched.set(false);
             self.scheduler.yeild_thread_no_intr();

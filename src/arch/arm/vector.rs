@@ -1,5 +1,4 @@
 use core::slice;
-use super::cpu;
 use platform;
 
 use collections::boxed::Box;

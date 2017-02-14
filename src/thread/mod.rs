@@ -30,7 +30,7 @@ const STACK_BASE: ::mem::VirtualAddress = ::mem::VirtualAddress(0x100_0000);
 impl Thread {
 
 
-    fn free_stack(s : ::mem::VirtualAddress) {
+    fn free_stack(_ : ::mem::VirtualAddress) {
         // TODO: we leak the stack :-(
     }
 

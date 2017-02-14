@@ -1,36 +1,34 @@
-use device::serial;
-use super::super::super::cpu;
+use device;
+use io;
 use super::super::super::pl011;
 
-use io::WriteFifo;
+const SERIAL_BASE_VADDR: ::mem::VirtualAddress = super::GPIO_BASE.uoffset(0x1000);
 
-pub const SERIAL_BASE_PADDR: ::mem::PhysicalAddress = ::mem::PhysicalAddress(super::MMIO_PSTART.0 +
-                                                                             (0x0020_1000));
-pub struct Writer {
+pub struct Serial {
     pl: &'static mut pl011::PL011,
 }
 
-impl Writer {
-    pub fn new(base: ::mem::VirtualAddress) -> Self {
-        unsafe {
-        let pl = pl011::PL011::new(base);
-        pl.init();
-        Writer {
-                pl:  pl
-            }
-        }
+type SerialDev = device::IoDevice<Serial>;
+
+impl Serial {
+    pub fn new() -> SerialDev {
+        let s = unsafe {
+            Serial{ pl : pl011::PL011::new(SERIAL_BASE_VADDR)}
+        };
+        SerialDev::new(s)
     }
 
 }
 
-impl serial::SerialMMIO for Writer {
-    fn write_byte_async(&mut self, b: u8) {
-        self.pl.write_one(b);
-        // wait for the memory operation to finish.
-        cpu::data_synchronization_barrier();
-    }
+impl io::WriteFifo for Serial {
+    fn can_write(&self) -> bool {self.pl.can_write()}
 
-    fn is_done(&self) -> bool {
-        self.pl.can_write()
-    }
+    fn write_one(&mut self, b : u8) {self.pl.write_one(b)}
+}
+
+impl io::ReadFifo for Serial {
+
+    fn can_read(&self) -> bool {self.pl.can_read()}
+    fn read_one(&mut self) -> u8 {self.pl.read_one()}
+
 }

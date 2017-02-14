@@ -1,4 +1,7 @@
 
+use collections::boxed::Box;
+use alloc::rc::Rc;
+
 pub trait SerialMMIO {
     fn write_byte_async(&mut self, ch: u8);
     fn is_done(&self) -> bool;
@@ -18,3 +21,20 @@ pub trait SerialMMIO {
         self.write_byte('\n' as u8);
     }
 }
+
+
+pub fn get_serial() -> Option<&'static super::io::Write> {
+    unsafe{
+        match SERIAL {
+            None => None,
+            Some(ref ser) => Some(ser.as_ref())
+        }
+    }}
+
+pub unsafe  fn set_serial( s : Rc<super::io::Write>) {
+        SERIAL = Some(s);
+
+}
+
+
+static mut SERIAL : Option<Rc<super::io::Write>> = None;

@@ -4,28 +4,19 @@ pub mod intr;
 pub mod spi;
 
 use core;
-use core::sync::atomic;
 use core::intrinsics::{volatile_load, volatile_store};
 use collections::boxed::Box;
 use alloc::rc::Rc;
 
 use super::super::mem;
 use super::super::pic;
+use device;
 use ::platform;
-use ::thread;
 use rlibc;
 
 use mem::MemoryMapper;
-use mem::PVMapper;
-
-use device::serial::SerialMMIO;
-use arch::arm::pic::InterruptSource;
 
 pub const ticks_in_second : usize = 20;
-
-static mut current_stack : usize = 0;
-static mut current_page_table: *const () = 0 as  *const ();
-static CPUS_AWAKE: atomic::AtomicUsize = atomic::ATOMIC_USIZE_INIT;
 
 fn up(a: usize) -> ::mem::PhysicalAddress {
     ::mem::PhysicalAddress((a + mem::PAGE_MASK) & (!mem::PAGE_MASK))
@@ -55,7 +46,7 @@ extern "C" {
     
 }
 
-const GPIO_BASE : ::mem::VirtualAddress = ::mem::VirtualAddress(MMIO_VSTART.0 + 0x20_0000);
+pub const GPIO_BASE : ::mem::VirtualAddress = ::mem::VirtualAddress(MMIO_VSTART.0 + 0x20_0000);
 
 // thanks http://sysprogs.com/VisualKernel/tutorials/raspberry/jtagsetup/
 fn set_gpio_alt(gpio : u32, func : u32 ) {
@@ -144,64 +135,54 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
                        down(ml.stack_phy.0)..up(sp_end_phy),
                        down(s_begin)..up(s_end)];
 
-    let mut frame_allocator =
-        mem::LameFrameAllocator::new(&skip_ranges, 1 << 27);
 
-    let page_table = mem::init_page_table(::mem::VirtualAddress(l1table_id),
-                                              ::mem::VirtualAddress(l2table_space_id),
-                                              &ml,
-                                              &mut frame_allocator);
+    // TODO: can remove stub from skip ranges now
 
-    page_table.map_device(&mut frame_allocator,
-                    MMIO_PSTART,
-                    MMIO_VSTART,
-                    MMIO_PEND - MMIO_PSTART)
-        .unwrap();
-    unsafe { serial_base = page_table.p2v(serial::SERIAL_BASE_PADDR).unwrap() }
-
-    // gpio mapped, we can enable JTAG pins!
-  //  enable_debugger();
-
-    write_to_console("Welcome home!");
-
-    ::arch::arm::arm_main(page_table, frame_allocator);
+    
+    ::arch::arm::arm_main(ml, &skip_ranges,
+        ::mem::VirtualAddress(l1table_id),
+        ::mem::VirtualAddress(l2table_space_id), 1 << 27);
 }
-
-static mut serial_base: ::mem::VirtualAddress = ::mem::VirtualAddress(0);
-
-static serial_writer : ::sync::CpuMutex<()> = ::sync::CpuMutex::<()>::new(());
  
 pub fn write_to_console(s: &str) {
-    let lock = serial_writer.lock();
-
-    serial::Writer::new(unsafe { serial_base }).writeln(s);
+ /* 
+    match device::serial::get_serial() {
+        None => {},
+        Some(ser) => {ser.write(s.as_bytes());},
+    };
+*/
 }
 
-pub fn send_ipi(id : usize, ipi : ::cpu::IPI) {
+pub fn send_ipi(_ : usize, _ : ::cpu::IPI) {
 }
 
-
-fn clear_ipi(ipi : ::cpu::IPI) {
-}
 pub struct PlatformServices {
 //    pic : Box<pic::PIC>
 }
 
-
-
 // This function should be called when we have a heap and a scheduler.
 // TODO make sure we have a scheduler..
-pub fn init_board() -> PlatformServices {
+pub fn init_board(pic : &mut pic::PIC< Box<pic::InterruptSource> , Rc<platform::Interruptable> >) -> PlatformServices {
     
     
-    let mut pic : pic::PIC< Box<pic::InterruptSource> , Rc<platform::Interruptable> > = pic::PIC::new();
+    platform::get_platform_services().mem_manager.map_device(
+                    MMIO_PSTART,
+                    MMIO_VSTART,
+                    MMIO_PEND - MMIO_PSTART)
+        .unwrap();
 
-    register_interrupts(&mut pic);
+   // unsafe { serial_base = page_table.p2v(serial::SERIAL_BASE_PADDR).unwrap() }
+
+    // gpio mapped, we can enable JTAG pins!
+  //  enable_debugger();
+
+
+
+    register_interrupts(pic);
   
 
-    let interrupts = InterHandler{pic:pic};
-    super::super::vector::get_vec_table().set_irq_callback(Box::new(interrupts));
-
+    write_to_console("Welcome home!");
+ 
     PlatformServices{
     }
 }
@@ -209,18 +190,21 @@ pub fn init_board() -> PlatformServices {
 pub fn register_interrupts(pic : &mut pic::PIC< Box<pic::InterruptSource> , Rc<platform::Interruptable> > ) {
   let handle = pic.add_source(Box::new(self::intr::PICDev::new()));
 
+  let serial = serial::Serial::new();
+  let serial = Rc::new(serial);
+  pic.register_callback_on_intr(handle, intr::Interrupts::UART as usize, serial.clone());
+    unsafe {
+      device::serial::set_serial(serial);
+  }
+
+  let spi = spi::SPIDev::new();
+  let spi = Rc::new(spi);
+  pic.register_callback_on_intr(handle, intr::Interrupts::SPI as usize, spi.clone());
+  unsafe {
+      device::spi::set_spi_master(spi);
+  }
   // TODO add timer
 
 //    pic.register_callback_on_intr(handle, intr::Interrupts::SPI, );
 
-}
-
-struct InterHandler {
-    pic : pic::PIC<Box<pic::InterruptSource> , Rc<platform::Interruptable> >
-}
-
-impl platform::Interruptable for InterHandler {
-    fn interrupted(&self, ctx: &mut platform::Context) {
-        self.pic.interrupted(ctx)
-    }
 }

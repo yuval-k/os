@@ -1,4 +1,5 @@
 pub mod serial;
+pub mod spi;
 
 use collections::vec::Vec;
 use core::cmp;
@@ -23,20 +24,22 @@ pub struct IoDeviceInner<T : io::WriteFifo + io::ReadFifo > {
     tx_buffer : Vec<u8>,
 }
 
-impl<T : io::WriteFifo + io::ReadFifo > IoDevice<T> {
-        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            let ig  = platform::intr::no_interrupts();
-            {
-                let mut dev = self.io_dev.lock();
-                dev.tx_buffer.extend(buf);
-            
-            }
-            self.try_write();
 
-            Ok(buf.len())
+impl<T : io::WriteFifo + io::ReadFifo > IoDevice<T> {
+
+        pub fn new(device : T) -> Self {
+            IoDevice {
+                io_dev : sync::CpuMutex::new(
+                    IoDeviceInner{
+                    dev       : device,
+                    rx_buffer : vec![],
+                    tx_buffer : vec![],
+            }
+            )
+            }
         }
 
-        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        pub fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
             let ig  = platform::intr::no_interrupts();
             self.try_read();
 
@@ -80,6 +83,24 @@ impl<T : io::WriteFifo + io::ReadFifo > IoDevice<T> {
         }
 
     }
+}
+
+
+
+impl<T : io::WriteFifo + io::ReadFifo > io::Write for  IoDevice<T> {
+
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let ig  = platform::intr::no_interrupts();
+        {
+            let mut dev = self.io_dev.lock();
+            dev.tx_buffer.extend(buf);
+        
+        }
+        self.try_write();
+
+        Ok(buf.len())
+    }
+
 }
 
 impl<T : io::WriteFifo + io::ReadFifo > platform::Interruptable for IoDevice<T> {

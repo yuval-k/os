@@ -41,7 +41,7 @@ use alloc::arc::Arc;
 
 fn init_heap(mapper: &mut ::mem::MemoryMapper, frame_allocator: &mut ::mem::FrameAllocator) {
     const HEAP_BASE: ::mem::VirtualAddress = mem::VirtualAddress(0xf000_0000);
-    const HEAP_SIZE: mem::MemorySize = mem::MemorySize::MegaBytes(40); // 4mb heap
+    const HEAP_SIZE: mem::MemorySize = mem::MemorySize::MegaBytes(40);
     let pa = frame_allocator.allocate(mem::to_pages(HEAP_SIZE).ok().unwrap()).unwrap();
     mapper.map(frame_allocator, pa, HEAP_BASE, HEAP_SIZE).unwrap();
     kernel_alloc::init_heap(HEAP_BASE.0,
@@ -93,7 +93,9 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
     // TODO add the sched interrupt back, to be explicit
     let arch_plat_services = init_platform();
 
-    platform::get_mut_platform_services().arch_services = Some(arch_plat_services);
+    unsafe {
+        platform::get_mut_platform_services().arch_services = Some(arch_plat_services);
+    }
 
     // scheduler is ready ! we can use sync objects!
 

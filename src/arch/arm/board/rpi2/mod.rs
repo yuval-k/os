@@ -376,8 +376,8 @@ impl platform::Interruptable for IPIHandler {
 
 fn int_to_ipi(i : u32) -> ::cpu::IPI{
     match i {
-        0 => ::cpu::IPI::MEM_CHANGED,
-        1 => ::cpu::IPI::SCHED_CHANGED,
+        0 => ::cpu::IPI::MemChanged,
+        1 => ::cpu::IPI::SchedChanged,
         _ => panic!("unknown IPIs")
     
     }

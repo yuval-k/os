@@ -7,7 +7,7 @@ pub enum Error {
 
 pub type Result<T> = result::Result<T, Error>;
 
-pub trait ReadFifo {
+pub trait ReadFifo  {
     fn can_read(&self) -> bool;
     fn read_one(&mut self) -> u8;
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
@@ -30,11 +30,31 @@ pub trait ReadFifo {
     }
 }
 
-pub trait WriteFifo {
+pub trait Write {
+        fn write(&mut self, buf: &[u8]) -> Result<usize>;
+}
+pub trait Read {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize>;
+}
+
+impl<T: WriteFifo> Write for T {
+    fn write(&mut self, buf: &[u8]) -> Result<usize> {
+        self.try_write(buf)
+  }
+}
+
+pub trait WriteFifo : Write {
     fn can_write(&self) -> bool;
     fn write_one(&mut self, b : u8);
+    
+    fn writeln(&mut self, s: &str) -> Result<usize> {
+        let size = self.write(s.as_bytes())?; 
+        let b = ['\n' as u8];
+        self.write(&b)?;
+        Ok(size+1)
+    }
 
-    fn write(&mut self, buf: &[u8]) -> Result<usize> {
+    fn try_write(&mut self, buf: &[u8]) -> Result<usize> {
         if buf.len() == 0 {
             return Ok(0)
         }

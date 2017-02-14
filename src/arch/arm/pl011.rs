@@ -89,19 +89,17 @@ pub struct PL011 {
 
 impl PL011 {
     pub unsafe fn new(v : ::mem::VirtualAddress) -> &'static mut Self {
-         &mut *(v.0 as *mut PL011)
-    }
-    
-    pub unsafe fn init(&mut self) {
-        self.integer_baud_rate.write(1);
-        self.fractional_baud_rate.write(40);
+         let p = &mut *(v.0 as *mut PL011);
+        p.integer_baud_rate.write(1);
+        p.fractional_baud_rate.write(40);
         // update, as according to spec there are bits that should not be 
         // modified
-        self.line_control.update(|line_control| {
+        p.line_control.update(|line_control| {
             *line_control |= ENABLE_FIFO | WLEN_8;
         });
-        self.control.write(UART_ENABLE | TRANSMIT_ENABLE | RECEIVE_ENABLE);
+        p.control.write(UART_ENABLE | TRANSMIT_ENABLE | RECEIVE_ENABLE);
         
+        p
     }
    
 }

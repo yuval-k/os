@@ -1,8 +1,5 @@
-use core::iter::Iterator;
 use collections::Vec;
-use core::ops::Range;
 use platform;
-use collections::boxed::Box;
 use core::borrow::Borrow;
 
 

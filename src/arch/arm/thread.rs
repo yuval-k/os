@@ -1,6 +1,5 @@
 use core::intrinsics::volatile_store;
 use collections::boxed::Box;
-use alloc::boxed::FnBox;
 
 const SP_OFFSET: u32 = 0;
 
@@ -50,8 +49,10 @@ pub fn switch_context(current_thread: Option< Box<::thread::Thread>>, new_thread
     switch_context2 can now be in theory without parameters, but i left them there for reference.
 */
 extern {
+    
      fn switch_context3(current_context: *mut Context, new_context: *const Context, old_thread : *mut ::thread::Thread, new_thread : *mut ::thread::Thread) -> *mut ::thread::Thread;
 }
+
 #[naked]
 extern "C" fn switch_context2(current_context: *mut Context, new_context: *const Context, old_thread : *mut ::thread::Thread, new_thread : *mut ::thread::Thread) -> *mut ::thread::Thread {
 
@@ -61,7 +62,7 @@ extern "C" fn switch_context2(current_context: *mut Context, new_context: *const
             /* if no previous thread, don't save it */
             cmp r0, #0
             beq 1f
-            /* store all regs in the stack - cause we can! */
+            /* store non scratch regs in the stack - cause we can! */
             push {r4-r12,r14}
             /* save to r0, restore from r1 */
             /* TODO : might not need to save cspr, as this should always happen from the same mode (kernel mode) */
@@ -80,7 +81,6 @@ extern "C" fn switch_context2(current_context: *mut Context, new_context: *const
             /* changing threads so time to clear exclusive loads */
             clrex
 
-            /* TODO: add MemBar incase thread goes to other cpu */
             /* move the thread objects to r0 and r0 */
             mov r0, r2
             mov r1, r3
@@ -93,9 +93,12 @@ extern "C" fn switch_context2(current_context: *mut Context, new_context: *const
         ::core::intrinsics::unreachable();
     }
 }
-    /* enable interrupts for new thread, as cspr is at unknown state..*/
+
+/* machine independt code in the scheduler will enable interrupts enable interrupts for new thread, as cspr is at unknown state..*/
 #[no_mangle]
 extern "C" fn new_thread_trampoline2(old_thread : *mut ::thread::Thread, new_thread : *mut ::thread::Thread) {
+
+    assert!((super::cpu::get_cpsr() & super::cpu::MODE_MASK) == super::cpu::SUPER_MODE);
 
     let old_thread = if old_thread == (0 as *mut ::thread::Thread) {
         None
@@ -123,10 +126,6 @@ extern "C" fn new_thread_trampoline1() {
     };
 
 }
-
-
-// cspr in system mode with interrupts enabled and no flags.
-const NEW_CSPR: u32 = super::cpu::SUPER_MODE;
 
 pub fn new_thread(stack: ::mem::VirtualAddress)
                   -> Context {

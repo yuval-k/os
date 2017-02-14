@@ -1,15 +1,11 @@
 use collections::Vec;
 use collections::boxed::Box;
 use  core::sync::atomic;
-use core::cell::RefCell;
 use super::platform;
 use super::thread;
 
 use platform::ThreadId;
 use sync;
-
-
-const WAKE_NEVER: u64 = 0xFFFFFFFF_FFFFFFFF;
 
 // TODO: make this Thread and SMP safe.
 // TODO this is the one mega unsafe class, so it needs to take care of it's on safety.
@@ -188,7 +184,13 @@ impl Sched {
         // cpu.current = current
         // threads.insert(old)
 
+        /* MemBar incase thread goes to other cpu */
+
+        platform::memory_write_barrier();
+
         let (old, current) = platform::switch_context(Some(curr_thread), new_thread.unwrap());
+
+        platform::memory_read_barrier();
 
         ::platform::get_platform_services().get_current_cpu().set_running_thread(current);
 

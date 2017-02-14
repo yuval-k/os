@@ -1,0 +1,4 @@
+#!/bin/bash
+
+exec $HOME/x-tools/arm-unknown-linux-gnueabi/bin/arm-unknown-linux-gnueabi-gdb ./target/kernel.elf -ex "target remote 192.168.1.20:3333"
+

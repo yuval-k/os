@@ -2,46 +2,22 @@ mod spi;
 
 use platform;
 use sync;
-use core::mem;
-use collections::vec::Vec;
-use collections::boxed::Box;
-use alloc::boxed::FnBox;
+use device;
 
-
-use io::WriteFifo;
 use io::ReadFifo;
+use io::Write;
+
+pub use device::spi::ClockPhase;
+pub use device::spi::ClockPolarity;
+pub use device::spi::Hz;
 
 struct Transfer {
-    buf : Vec<u8>,
-    slave : usize,
+    transfer : device::spi::Transfer,
     bytes_read  : usize,
     bytes_written : usize,
-    callback : Option<Box<FnBox(Vec<u8>)>>,
 }
 
-impl Transfer {
-    fn new<F>(buf : Vec<u8>, slave : usize, callback : F) -> Self 
-    where F: FnOnce(Vec<u8>),
-          F: Send + 'static {
-        Transfer {
-            buf           : buf,
-            slave         : slave,
-            bytes_read    : 0,
-            bytes_written : 0,
-            callback      : Some(Box::new(callback))
-        }
-    }
-}
-
-impl Drop for Transfer {
-    fn drop(&mut self) {
-        let buf =  mem::replace(&mut self.buf, vec![]);
-        (self.callback.take().unwrap())(buf);
-    }
-}
-
-
-struct SPIDev {
+pub struct SPIDev {
     dev_impl : sync::CpuMutex<SPIDevImpl>
 }
 struct SPIDevImpl {
@@ -49,9 +25,11 @@ struct SPIDevImpl {
     cur_transfer : Option<Transfer>
 }
 
+
 impl SPIDev {
-    unsafe fn new() -> Self {
-        
+
+    pub fn new() -> Self {
+    unsafe {    
         SPIDev{
            dev_impl : sync::CpuMutex::new(
                 SPIDevImpl {
@@ -61,8 +39,19 @@ impl SPIDev {
                 )
         }
     }
+    }
+}
 
-    fn start_transfer(&mut self, t : Transfer) -> Result<(),()> {
+impl device::spi::SPIMaster for SPIDev {
+
+    fn confiure(&mut self, clock_pol : ClockPolarity, clock_phase : ClockPhase, speed : Hz) -> Result<(),()>{
+        let ig = platform::intr::no_interrupts();
+        let mut spidev = self.dev_impl.lock();
+        spidev.spi.confiure(clock_pol, clock_phase, speed)
+
+    }
+
+    fn start_transfer(&mut self, t : device::spi::Transfer) -> Result<(),()> {
         // enable TA and clear pipes.
         let mut cs_updates = spi::ControlStatusFlags::empty();
 
@@ -78,6 +67,12 @@ impl SPIDev {
         if spidev.cur_transfer.is_some() {
             return Err(())
         }
+
+        let t = Transfer {
+            transfer : t,
+            bytes_read  : 0,
+            bytes_written : 0,
+        };
        
         spidev.cur_transfer = Some(t);
         platform::memory_write_barrier();
@@ -119,7 +114,7 @@ e data to write, write up to
 12 bytes to SPIFIFO. 
 */
 impl platform::Interruptable for SPIDev {
-    fn interrupted(&self, c : &mut platform::Context) {
+    fn interrupted(&self, _ : &mut platform::Context) {
 
         let mut spidev = self.dev_impl.lock();
 
@@ -134,15 +129,15 @@ impl platform::Interruptable for SPIDev {
 
             let flags = spidevspi.control_status.read();
             if flags.contains(spi::DONE) {
-                if transfer.bytes_written < transfer.buf.len() {
-                    if let Ok(written) = spidevspi.write(&transfer.buf[transfer.bytes_written..]) {
+                if transfer.bytes_written < transfer.transfer.buf.len() {
+                    if let Ok(written) = spidevspi.write(&transfer.transfer.buf[transfer.bytes_written..]) {
                         transfer.bytes_written += written;
                     }
                 } else {
                     spidevspi.control_status.update(|cs| {
                         cs.remove(spi::TA);
                     });
-                    if let Ok(read) =  spidevspi.read(&mut transfer.buf[transfer.bytes_read..]) {
+                    if let Ok(read) =  spidevspi.read(&mut transfer.transfer.buf[transfer.bytes_read..]) {
                         transfer.bytes_read += read;
                     }
                     // we are done, no need to place the transfer back.
@@ -150,17 +145,18 @@ impl platform::Interruptable for SPIDev {
                 }
 
             }
+            // read flags again
+            let flags = spidevspi.control_status.read();
             if flags.contains(spi::RXR) {
-                    if let Ok(read) =  spidevspi.read(&mut transfer.buf[transfer.bytes_read..]) {
+                    if let Ok(read) =  spidevspi.read(&mut transfer.transfer.buf[transfer.bytes_read..]) {
                         transfer.bytes_read += read;
                     }
-                    if let Ok(written) = spidevspi.write(&transfer.buf[transfer.bytes_written..]) {
+                    if let Ok(written) = spidevspi.write(&transfer.transfer.buf[transfer.bytes_written..]) {
                         transfer.bytes_written += written;
                     }
             }
         }
 
         spidev.cur_transfer = Some(transfer);
-
     }
 }

@@ -14,8 +14,8 @@ pub struct CPU {
 
 #[derive(Clone, Copy)]
 pub enum IPI {
-    MEM_CHANGED,
-    SCHED_CHANGED,
+    MemChanged,
+    SchedChanged,
 }
 
 impl CPU {
@@ -45,8 +45,8 @@ impl CPU {
 
     pub fn interrupted(&self, ipi : IPI) {
         match ipi {
-            IPI::MEM_CHANGED => ::platform::invalidate_tlb(),
-            IPI::SCHED_CHANGED => /* if on idle thread - yeild();*/{} ,
+            IPI::MemChanged => ::platform::invalidate_tlb(),
+            IPI::SchedChanged => /* if on idle thread - yeild();*/{} ,
         }
         
     }

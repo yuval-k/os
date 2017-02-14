@@ -1,5 +1,11 @@
 use volatile;
 use io;
+use device;
+
+
+pub use device::spi::ClockPhase;
+pub use device::spi::ClockPolarity;
+pub use device::spi::Hz;
 
 const SPI0_ADDR : ::mem::VirtualAddress = super::super::GPIO_BASE.uoffset(0x4000);
 
@@ -46,17 +52,6 @@ pub struct SPI  {
    pub dc : volatile::Volatile<u32>,
 }
 
-pub enum ClockPolarity {
-    ResetIsLow,
-    ResetIsHigh,
-}
-
-pub enum ClockPhase {
-    Middle,
-    Begin,
-}
-
-struct Hz(u32);
 
 impl SPI { 
     pub unsafe fn new() -> &'static mut Self {
