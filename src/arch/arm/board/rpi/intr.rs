@@ -161,12 +161,11 @@ impl PICDev {
     }
 
     fn split_intr(intr_num : usize) -> (PicFlagsBasic, PicFlags1, PicFlags2) {
-        if intr_num >= 64 {
-            (PicFlagsBasic::empty(), PicFlags1::empty(), PicFlags2::from_bits_truncate(1 << (intr_num - 64)))
-       } else if intr_num >= 32 {
-            ( PicFlagsBasic::empty(), PicFlags1::empty(), PicFlags2::from_bits_truncate(1 << (intr_num - 32)))
-        } else {
-            (PicFlagsBasic::from_bits_truncate(1 << intr_num), PicFlags1::empty(),  PicFlags2::empty())            
+        match intr_num {
+            0 ... 31  =>  (PicFlagsBasic::empty(), PicFlags1::from_bits_truncate(1 << intr_num), PicFlags2::empty()),
+            32 ... 63 => ( PicFlagsBasic::empty(), PicFlags1::empty(), PicFlags2::from_bits_truncate(1 << (intr_num - 32))),
+            64 ... 95 => (PicFlagsBasic::from_bits_truncate(1 << (intr_num - 64)), PicFlags1::empty(),  PicFlags2::empty()),
+            _ => panic!("unknown interrupt number"),
         }
     }
 }

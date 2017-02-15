@@ -2,6 +2,7 @@ pub mod serial;
 pub mod stub;
 pub mod intr;
 pub mod spi;
+pub mod gpio;
 
 use core;
 use core::intrinsics::{volatile_load, volatile_store};
@@ -145,12 +146,12 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
 }
  
 pub fn write_to_console(s: &str) {
- /* 
+  
     match device::serial::get_serial() {
         None => {},
         Some(ser) => {ser.write(s.as_bytes());},
     };
-*/
+
 }
 
 pub fn send_ipi(_ : usize, _ : ::cpu::IPI) {

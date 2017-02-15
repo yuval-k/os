@@ -7,6 +7,7 @@ use io;
 use sync;
 use platform;
 use core::ops::DerefMut;
+use collections::boxed::Box;
 
 pub trait Device {
     fn new() -> Self;
@@ -14,20 +15,23 @@ pub trait Device {
 }
 
 
-pub struct IoDevice<T : io::WriteFifo + io::ReadFifo > {
-    io_dev : sync::CpuMutex<IoDeviceInner<T>>
+trait ReadWriteFifo:  io::WriteFifo + io::ReadFifo {}
+impl<T> ReadWriteFifo for T where T: io::WriteFifo + io::ReadFifo {}
+
+pub struct IoDevice {
+    io_dev : sync::CpuMutex<IoDeviceInner>
 }
 
-pub struct IoDeviceInner<T : io::WriteFifo + io::ReadFifo > {
-    dev : T,
+pub struct IoDeviceInner {
+    dev : Box<ReadWriteFifo>,
     rx_buffer : Vec<u8>,
     tx_buffer : Vec<u8>,
 }
 
 
-impl<T : io::WriteFifo + io::ReadFifo > IoDevice<T> {
+impl IoDevice {
 
-        pub fn new(device : T) -> Self {
+        pub fn new(device : Box<ReadWriteFifo>) -> Self {
             IoDevice {
                 io_dev : sync::CpuMutex::new(
                     IoDeviceInner{
@@ -83,13 +87,8 @@ impl<T : io::WriteFifo + io::ReadFifo > IoDevice<T> {
         }
 
     }
-}
 
-
-
-impl<T : io::WriteFifo + io::ReadFifo > io::Write for  IoDevice<T> {
-
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+    pub fn write(&self, buf: &[u8]) -> io::Result<usize> {
         let ig  = platform::intr::no_interrupts();
         {
             let mut dev = self.io_dev.lock();
@@ -103,7 +102,7 @@ impl<T : io::WriteFifo + io::ReadFifo > io::Write for  IoDevice<T> {
 
 }
 
-impl<T : io::WriteFifo + io::ReadFifo > platform::Interruptable for IoDevice<T> {
+impl platform::Interruptable for IoDevice {
     fn interrupted(&self, _ : &mut platform::Context) {
         self.try_write();
         self.try_read();
