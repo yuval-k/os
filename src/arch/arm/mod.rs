@@ -52,8 +52,8 @@ struct InterHandler {
 }
 
 impl platform::Interruptable for InterHandler {
-    fn interrupted(&self, ctx: &mut platform::Context) {
-        self.pic.interrupted(ctx)
+    fn interrupted(&self) {
+        self.pic.interrupted()
     }
 }
 

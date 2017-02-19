@@ -14,6 +14,7 @@ use super::super::pic;
 use device;
 use ::platform;
 use rlibc;
+use io;
 
 use mem::MemoryMapper;
 
@@ -144,12 +145,12 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
         ::mem::VirtualAddress(l1table_id),
         ::mem::VirtualAddress(l2table_space_id), 1 << 27);
 }
- 
+
 pub fn write_to_console(s: &str) {
   
     match device::serial::get_serial() {
         None => {},
-        Some(ser) => {ser.write(s.as_bytes());},
+        Some(ser) => {ser.lock().write(s.as_bytes());},
     };
 
 }
@@ -191,11 +192,12 @@ pub fn init_board(pic : &mut pic::PIC< Box<pic::InterruptSource> , Rc<platform::
 pub fn register_interrupts(pic : &mut pic::PIC< Box<pic::InterruptSource> , Rc<platform::Interruptable> > ) {
   let handle = pic.add_source(Box::new(self::intr::PICDev::new()));
 
-  let serial = serial::Serial::new();
-  let serial = Rc::new(serial);
-  pic.register_callback_on_intr(handle, intr::Interrupts::UART as usize, serial.clone());
+  let gpio = unsafe{gpio::GPIO::new()};
+  let serial = serial::Serial::new(gpio);
+
+  // TODO: support PL interrupts: pic.register_callback_on_intr(handle, intr::Interrupts::UART as usize, serial.clone());
     unsafe {
-      device::serial::set_serial(serial);
+      device::serial::set_serial(Box::new(io::BusyWaitWriter::new(serial)));
   }
 
   let spi = spi::SPIDev::new();

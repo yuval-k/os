@@ -3,6 +3,7 @@ use collections::boxed::Box;
 use alloc::rc::Rc;
 use device::IoDevice;
 use io;
+use sync;
 
 pub trait SerialMMIO {
     fn write_byte_async(&mut self, ch: u8);
@@ -25,18 +26,18 @@ pub trait SerialMMIO {
 }
 
 
-pub fn get_serial() -> Option<&'static IoDevice> {
+pub fn get_serial() -> Option<&'static sync::CpuMutex< Box<io::Write>>> {
     unsafe {
         match SERIAL {
             None => None,
-            Some(ref ser) => Some(ser.as_ref())
+            Some(ref ser) => Some(ser)
         }
     }
 }
 
-pub unsafe  fn set_serial( s : Rc<IoDevice>) {
-        SERIAL = Some(s);
+pub unsafe fn set_serial( s : Box<io::Write>) {
+        SERIAL = Some(sync::CpuMutex::new(s));
 }
 
 
-static mut SERIAL : Option<Rc<IoDevice>> = None;
+static mut SERIAL : Option<sync::CpuMutex<Box<io::Write>>> = None;

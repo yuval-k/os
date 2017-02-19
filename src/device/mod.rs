@@ -15,7 +15,7 @@ pub trait Device {
 }
 
 
-trait ReadWriteFifo:  io::WriteFifo + io::ReadFifo {}
+trait ReadWriteFifo:  io::WriteFifo + io::ReadFifo + io::Read + io::Write {}
 impl<T> ReadWriteFifo for T where T: io::WriteFifo + io::ReadFifo {}
 
 pub struct IoDevice {
@@ -103,7 +103,7 @@ impl IoDevice {
 }
 
 impl platform::Interruptable for IoDevice {
-    fn interrupted(&self, _ : &mut platform::Context) {
+    fn interrupted(&self) {
         self.try_write();
         self.try_read();
     }

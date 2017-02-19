@@ -4,7 +4,7 @@ use platform;
 use sync;
 use device;
 
-use io::ReadFifo;
+use io::Read;
 use io::Write;
 
 pub use device::spi::ClockPhase;
@@ -114,7 +114,7 @@ e data to write, write up to
 12 bytes to SPIFIFO. 
 */
 impl platform::Interruptable for SPIDev {
-    fn interrupted(&self, _ : &mut platform::Context) {
+    fn interrupted(&self) {
 
         let mut spidev = self.dev_impl.lock();
 

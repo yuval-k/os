@@ -55,7 +55,7 @@ impl<InterruptSourceT: Borrow<InterruptSource>, InterruptableT: Borrow<platform:
 }
 
 impl<InterruptSourceT: Borrow<InterruptSource> , InterruptableT: Borrow<platform::Interruptable> >  platform::Interruptable for PIC<InterruptSourceT, InterruptableT> {
-    fn interrupted(&self, ctx: &mut platform::Context) {
+    fn interrupted(&self) {
         let mut source_index : usize = 0;
         for is in &self.sources {
             let is : &InterruptSource = is.borrow();
@@ -63,7 +63,7 @@ impl<InterruptSourceT: Borrow<InterruptSource> , InterruptableT: Borrow<platform
                 if is.is_interrupted(intr) {
                     let idx = self.get_callback_index(source_index, intr);
                     if let Some(ref cb) = self.callbacks[idx] {
-                        cb.borrow().interrupted(ctx);
+                        cb.borrow().interrupted();
                     } else {
                         panic!("unexpected interrupt")
                     }

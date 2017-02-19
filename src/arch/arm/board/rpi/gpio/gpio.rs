@@ -27,7 +27,16 @@ fn to_func_select( fs : u32) ->  FunctionSelect {
         _ => panic!("Invalid pin!"),
     }
 }
-    
+
+bitflags! {
+    #[repr(C,packed)] pub flags PullType: u32 {
+        const OFF   = 0b00,
+        const PULL_DOWN   = 0b01,
+        const PULL_UP   = 0b10,
+        const RESERVED   = 0b11,
+    }
+}
+
 #[repr(C,packed)]
 pub struct GPIO  {
    pub func_sel : [volatile::Volatile<u32>; 6],
@@ -64,8 +73,8 @@ pub struct GPIO  {
    pub reserved10 : volatile::Volatile<u32>,
 
 
-   pub pull_up_dowmn_enable : volatile::Volatile<u32>,
-   pub pull_up_dowmn_enable_clock : [volatile::Volatile<u32>; 2],
+   pub pull_up_down_enable : volatile::Volatile<PullType>,
+   pub pull_up_down_enable_clock : [volatile::Volatile<u32>; 2],
    pub reserved11 : volatile::Volatile<u32>,
    pub test : volatile::Volatile<u32>,
 
@@ -75,7 +84,7 @@ pub struct GPIO  {
 macro_rules! read_bit {
     ( $selv:ident, $v:ident, $b:expr) => {
         match $b {
-            0...53 => ($selv.$v[$b >> 5].read() & (1 << ($b & 0b1_1111)) != 0),
+            0...53 => (($selv.$v[$b >> 5].read() & (1 << ($b & 0b1_1111))) != 0),
             _ => panic!("Invalid pin!"),
         }
     };
@@ -94,7 +103,7 @@ macro_rules! set_bit {
 
 impl GPIO {
     
-    pub unsafe fn new() -> &'static mut Self {
+    pub unsafe fn  new() -> &'static mut Self {
         &mut *(GPIO_ADDR.0 as *mut GPIO)
     }
 
@@ -138,5 +147,29 @@ impl GPIO {
     pub fn event_detect_status_clear(&mut self, pin : usize) {
         set_bit!(self, event_detect_status, pin)
     }
+
+
+
+    pub fn set_pullup_pulldown(&mut self, pin : usize, p : PullType) {
+        // 1. Write direction
+        self.pull_up_down_enable.write(p);
+        // 2. wait
+        wait150();
+        // 3. write clock
+        set_bit!(self, pull_up_down_enable_clock, pin);
+        // 4. wait
+        wait150();
+        // 5. disable pud -- not really sure what to do here as there is no disable value in the data sheet..
+        // 6. disable clock
+        self.pull_up_down_enable_clock[0].write(0);
+        self.pull_up_down_enable_clock[1].write(0);
+        
+    }
 }
 
+fn wait150() {
+    for _ in 0..150 {
+        // nop
+        unsafe{asm!("mov r0,r0")};
+    }
+}

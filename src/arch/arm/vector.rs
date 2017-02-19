@@ -186,20 +186,20 @@ pub fn init_interrupts() {
     }
 }
 
-pub struct VectorTable<InterruptableT: Borrow<platform::Interruptable>> {
+pub struct VectorTable<InterruptableT: Borrow<platform::InterruptableWithContext>> {
     // TODO re-write when we have a heap
     irq_callback: Option<InterruptableT>,
 }
 
 // TODO: sync access to this or even better, to it lock free :)
-static mut VEC_TABLE: VectorTable<Box<platform::Interruptable>> = VectorTable { irq_callback: None };
+static mut VEC_TABLE: VectorTable<Box<platform::InterruptableWithContext>> = VectorTable { irq_callback: None };
 
 // TODO: make thread safe if multi processing !!
-pub fn get_vec_table() -> &'static mut VectorTable<Box<platform::Interruptable>> {
+pub fn get_vec_table() -> &'static mut VectorTable<Box<platform::InterruptableWithContext>> {
     unsafe { &mut VEC_TABLE }
 }
 
-impl<InterruptableT: Borrow<platform::Interruptable>> VectorTable<InterruptableT> {
+impl<InterruptableT: Borrow<platform::InterruptableWithContext>> VectorTable<InterruptableT> {
     pub fn set_irq_callback(&mut self, callback: InterruptableT) {
         self.irq_callback = Some(callback);
     }
@@ -271,7 +271,7 @@ fn vector_data_abort_handler(ctx: &mut InterruptContext) {
 fn vector_irq_handler(ctx: &mut InterruptContext) {
     unsafe {
         if let Some(ref mut func) = VEC_TABLE.irq_callback {
-            func.interrupted(ctx);
+            func.interrupted_ctx(ctx);
         }
         platform::get_platform_services().post_interrupted(ctx);
     }
