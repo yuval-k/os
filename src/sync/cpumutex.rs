@@ -27,6 +27,7 @@ impl<T> CpuMutex<T> {
 pub struct CpuMutexGuard<'a, T: ?Sized + 'a> {
     mutex : &'a CpuMutex<T>,
     data: &'a mut T,
+    interrupt_guard : platform::intr::InterruptGuardOneShot
 
 }
 
@@ -37,13 +38,11 @@ impl<T: ?Sized> CpuMutex<T> {
         {
             mutex: &self,
             data: unsafe { &mut *self.data.get() },
+            interrupt_guard : platform::intr::no_interrupts(),
         }
     }
 
     fn obtain_lock(&self) {
-        if ::platform::get_interrupts() {
-            panic!("can't use cpu mutex when interrupts are enabled")
-        }
         let curcpu = ::platform::get_current_cpu_id() as isize;
         if self.owner.load(atomic::Ordering::Acquire) == curcpu {
             self.recursion.set(self.recursion.get() + 1);
