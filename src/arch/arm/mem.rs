@@ -609,9 +609,10 @@ impl PageTableInner {
             self.tmp_map[FREE_INDEX] = L2TableDescriptor::new(l2phy);
 
             cpu::memory_write_barrier();
+            // wait for the data to arrive to physical memory
+            cpu::data_synchronization_barrier();
             cpu::flush_caches();
             cpu::invalidate_tlb();
-            cpu::data_synchronization_barrier();
 
             let mapped_address = L1_VIRT_ADDRESS.uoffset(FREE_INDEX * PAGE_SIZE);
             let l2_for_phy = unsafe { L2Table::from_virt_address_no_init(mapped_address) };

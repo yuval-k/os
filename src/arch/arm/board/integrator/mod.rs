@@ -21,8 +21,6 @@ use device::serial::SerialMMIO;
 
 pub const ticks_in_second : usize = 20;
 
-pub const NUM_CPUS : usize = 1;
-
 fn up(a: usize) -> ::mem::PhysicalAddress {
     ::mem::PhysicalAddress((a + mem::PAGE_MASK) & (!mem::PAGE_MASK))
 }

@@ -19,11 +19,11 @@ use alloc::rc::Rc;
 
 
 
-#[cfg(multicpu)]
+#[cfg(feature = "multicpu")]
 pub fn get_num_cpus() -> usize {
     board::NUM_CPUS
 }
-#[cfg(not(multicpu))]
+#[cfg(not(feature = "multicpu"))]
 pub fn get_num_cpus() -> usize {
     1
 }

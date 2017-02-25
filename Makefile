@@ -6,7 +6,7 @@ BOARD?=integrator
 
 ifeq ($(BOARD),rpi2)
 TARGET ?= armv7-unknown-linux-gnueabihf
-MACHINE=raspi2,firmware=target/kernel.img -smp 4
+MACHINE=raspi2 -smp 4
 QEMU=qemu-system-arm
 RUSTCFLAGS=
 endif

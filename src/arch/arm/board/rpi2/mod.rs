@@ -41,7 +41,7 @@ fn down(a: usize) -> ::mem::PhysicalAddress {
 // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0159b/Bbaficij.html
 const MMIO_PSTART: ::mem::PhysicalAddress = ::mem::PhysicalAddress(0x3f000000);
 const MMIO_SIZE: usize = (16<<20);
-const MMIO_PEND: ::mem::PhysicalAddress = ::mem::PhysicalAddress(MMIO_PSTART.0 + MMIO_SIZE); //16mb periferals + 16mv arm local
+const MMIO_PEND: ::mem::PhysicalAddress = MMIO_PSTART.uoffset(MMIO_SIZE); //16mb periferals + 16mv arm local
 const MMIO_VSTART: ::mem::VirtualAddress = ::mem::VirtualAddress(0x1000_0000);
 
 const ARM_LOCAL_PSTART: ::mem::PhysicalAddress = ::mem::PhysicalAddress(0x4000_0000);
@@ -201,9 +201,20 @@ extern {
 // This function should be called when we have a heap and a scheduler.
 // TODO make sure we have a scheduler..
 pub fn init_board(pic : &mut pic::PIC< Box<pic::InterruptSource>, Rc<platform::Interruptable> >) -> PlatformServices {
+    
+    platform::get_platform_services().mem_manager.map_device(
+                    ARM_LOCAL_PSTART,
+                    ARM_LOCAL_VSTART,
+                    ARM_LOCAL_PEND - ARM_LOCAL_PSTART)
+        .unwrap();
+    
+    platform::get_platform_services().mem_manager.map_device(
+                    MMIO_PSTART,
+                    MMIO_VSTART,
+                    MMIO_PEND - MMIO_PSTART)
+        .unwrap();
 
-
-    unsafe { serial_base = platform::get_platform_services().mem_manager.p2v(serial::SERIAL_BASE_PADDR).unwrap() }
+    unsafe { serial_base = serial::SERIAL_BASE_VADDR;}
 
     // gpio mapped, we can enable JTAG pins!
   //  enable_debugger();

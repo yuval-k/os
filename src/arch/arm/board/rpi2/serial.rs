@@ -2,7 +2,8 @@ use ::device::serial;
 
 use core::intrinsics::{volatile_load, volatile_store};
 
-pub const SERIAL_BASE_PADDR: ::mem::PhysicalAddress = ::mem::PhysicalAddress(super::MMIO_PSTART.0 + (0x0020_1000));
+pub const SERIAL_BASE_PADDR: ::mem::PhysicalAddress = super::MMIO_PSTART.uoffset(0x0020_1000);
+pub const SERIAL_BASE_VADDR: ::mem::VirtualAddress = super::MMIO_VSTART.uoffset(0x0020_1000);
 pub const DATA_REG_OFFSET : usize = 0;
 pub const FLAG_REG_OFFSET : usize = 0x18;
 pub const UARTFR_TXFE : u32 = 1 << 7;
