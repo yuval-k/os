@@ -63,7 +63,7 @@ impl Timer {
 }
 
 impl platform::Interruptable for Timer {
-    fn interrupted(&self, ctx: &mut platform::Context) {
+    fn interrupted(&self) {
         self.clear_interrupt();
         (self.callback)();
     }

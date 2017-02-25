@@ -39,21 +39,6 @@ pub fn memory_read_barrier() {
   //  flush_caches(); not sure this is needed
 }
 
-#[inline(always)]
-pub fn flush_caches() {
-
-    // http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0360e/I1014942.html
-    // clean and Invalidate Both Caches. Also flushes the branch target cache
-    // first instruction cleansd the cache, the second one invalidates it.
-    unsafe {
-        asm!("
-        mov r0, #0
-        mcr	p15, 0, r0, c7, c5, 0
-        mcr	p15, 0, r0, c7, c14, 0
-        mcr	p15, 0, r0, c7, c10, 4
-        mcr p15, 0, $0, c7, c7, 0"  ::"r"(0)::"volatile")
-    }
-}
 
 #[inline(always)]
 pub fn invalidate_tlb() {

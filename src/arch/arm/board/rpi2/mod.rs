@@ -152,34 +152,9 @@ pub extern "C" fn rpi_main(sp_end_virt: usize,
                        down(ml.stack_phy.0)..up(sp_end_phy),
                        down(s_begin)..up(s_end)];
 
-    let mut frame_allocator =
-        mem::LameFrameAllocator::new(&skip_ranges, 1 << 27);
-
-    // TODO support sending IPIs to other CPUs when page mapping changes so they can flush tlbs.
-    let page_table = mem::init_page_table(::mem::VirtualAddress(l1table_id),
-                                              ::mem::VirtualAddress(l2table_space_id),
-                                              &ml,
-                                              &mut frame_allocator);
-
-    // map all the gpio
-    page_table.map_device(&mut frame_allocator,
-                    ARM_LOCAL_PSTART,
-                    ARM_LOCAL_VSTART,
-                    ARM_LOCAL_PEND - ARM_LOCAL_PSTART)
-        .unwrap();
-    page_table.map_device(&mut frame_allocator,
-                    MMIO_PSTART,
-                    MMIO_VSTART,
-                    MMIO_PEND - MMIO_PSTART)
-        .unwrap();
-    unsafe { serial_base = page_table.p2v(serial::SERIAL_BASE_PADDR).unwrap() }
-
-    // gpio mapped, we can enable JTAG pins!
-  //  enable_debugger();
-
-    write_to_console("Welcome home!");
-
-    ::arch::arm::arm_main(page_table, frame_allocator);
+    ::arch::arm::arm_main(ml, &skip_ranges,
+        ::mem::VirtualAddress(l1table_id),
+        ::mem::VirtualAddress(l2table_space_id), 1 << 27);
 }
 
 static mut serial_base: ::mem::VirtualAddress = ::mem::VirtualAddress(0);
@@ -225,7 +200,16 @@ extern {
 
 // This function should be called when we have a heap and a scheduler.
 // TODO make sure we have a scheduler..
-pub fn init_board() -> PlatformServices {
+pub fn init_board(pic : &mut pic::PIC< Box<pic::InterruptSource>, Rc<platform::Interruptable> >) -> PlatformServices {
+
+
+    unsafe { serial_base = platform::get_platform_services().mem_manager.p2v(serial::SERIAL_BASE_PADDR).unwrap() }
+
+    // gpio mapped, we can enable JTAG pins!
+  //  enable_debugger();
+
+    write_to_console("Welcome home!");
+    
     // TODO: init mailbox
 
     // TODO: check how many other CPUs we have,
@@ -345,8 +329,8 @@ struct InterHandler {
 }
 
 impl platform::Interruptable for InterHandler {
-    fn interrupted(&self, ctx: &mut platform::Context) {
-        self.pic.interrupted(ctx)
+    fn interrupted(&self) {
+        self.pic.interrupted()
     }
 }
 
@@ -354,7 +338,7 @@ struct IPIHandler {
 }
 
 impl platform::Interruptable for IPIHandler {
-    fn interrupted(&self, ctx: &mut platform::Context) {
+    fn interrupted(&self) {
     
         let id = ::platform::get_current_cpu_id();
         let mailboxes = & ::platform::get_platform_services().arch_services.as_ref().unwrap().board_services.mailboxes;

@@ -63,26 +63,10 @@ pub extern "C" fn integrator_main(sp_end_virt: usize,
                        down(ml.stack_phy.0)..up(sp_end_phy),
                        pagetable_start..pagetable_end];
 
-    let mut frame_allocator =
-        mem::LameFrameAllocator::new(&skip_ranges, 1 << 27);
 
-    let mut page_table = mem::init_page_table(::mem::VirtualAddress(l1table_id),
-                                              ::mem::VirtualAddress(l2table_space_id),
-                                              &ml,
-                                              &mut frame_allocator);
-    frame_allocator.deallocate( pagetable_start, ::mem::to_pages(pagetable_end-pagetable_start).expect("misaligned pages!"));
-    // map all the gpio
-    page_table.map_device(&mut frame_allocator,
-                    MMIO_PSTART,
-                    MMIO_VSTART,
-                    MMIO_PEND - MMIO_PSTART)
-        .unwrap();
-
-    unsafe { serial_base = page_table.p2v(serial::SERIAL_BASE_PADDR).unwrap() }
-
-    write_to_console("Welcome home!");
-
-    ::arch::arm::arm_main(page_table, frame_allocator);
+    ::arch::arm::arm_main(ml, &skip_ranges,
+        ::mem::VirtualAddress(l1table_id),
+        ::mem::VirtualAddress(l2table_space_id), 1 << 27);
 
     loop {}
 }
@@ -106,7 +90,11 @@ pub fn send_ipi(id : usize, ipi : ::cpu::IPI) {
 
 
 // This function will be called when we have a heap and a scheduler.
-pub fn init_board() -> PlatformServices {
+pub fn init_board(pic : &mut pic::PIC< Box<pic::InterruptSource> , Rc<platform::Interruptable> >) -> PlatformServices {
+
+    unsafe { serial_base = platform::get_platform_services().mem_manager.p2v(serial::SERIAL_BASE_PADDR).unwrap() }
+
+    write_to_console("Welcome home!");
 
     let mapper = &::platform::get_platform_services().mem_manager;
 

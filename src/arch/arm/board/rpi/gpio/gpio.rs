@@ -161,6 +161,7 @@ impl GPIO {
         wait150();
         // 5. disable pud -- not really sure what to do here as there is no disable value in the data sheet..
         // 6. disable clock
+        // (i'm not bothering to check which one we used.. just disable everything..)
         self.pull_up_down_enable_clock[0].write(0);
         self.pull_up_down_enable_clock[1].write(0);
         

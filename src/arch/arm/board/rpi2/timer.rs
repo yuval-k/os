@@ -30,7 +30,7 @@ impl GlobalTimer {
 }
 
 impl platform::Interruptable for GlobalTimer {
-    fn interrupted(&self, ctx: &mut platform::Context) {
+    fn interrupted(&self) {
 		cpu::write_cntv_tval(self.time);
 		::platform::get_platform_services().clock();
 	}
