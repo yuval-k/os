@@ -136,8 +136,16 @@ impl DefaultMemoryManagaer {
             mem_mapper: m
         }
     }
-
 }
+
+#[cfg(feature = "multicpu")]
+fn send_ipi() {
+    platform::get_platform_services().get_current_cpu().send_ipi_to_others(cpu::IPI::MemChanged)
+}
+
+#[cfg(not(feature = "multicpu"))]
+fn send_ipi() {}
+
 impl MemoryManagaer for DefaultMemoryManagaer {
 
     fn map(&self,
@@ -147,7 +155,7 @@ impl MemoryManagaer for DefaultMemoryManagaer {
            -> Result<(), ()> {
         let r = self.mem_mapper.map(self.frame_allocator.as_ref(), p, v, size);
         if let Ok(_) = r {
-            platform::get_platform_services().get_current_cpu().send_ipi_to_others(cpu::IPI::MemChanged);
+            send_ipi();
         }
 
         r
@@ -159,7 +167,7 @@ impl MemoryManagaer for DefaultMemoryManagaer {
              -> Result<(), ()> {
         let r = self.mem_mapper.unmap(self.frame_allocator.as_ref(), v, size);
         if let Ok(_) = r {
-            platform::get_platform_services().get_current_cpu().send_ipi_to_others(cpu::IPI::MemChanged);
+            send_ipi();
         }
         r
     }
@@ -172,7 +180,7 @@ impl MemoryManagaer for DefaultMemoryManagaer {
         // TODO: add IPI
         let r = self.mem_mapper.map_device(self.frame_allocator.as_ref(), p, v, size);
         if let Ok(_) = r {
-            platform::get_platform_services().get_current_cpu().send_ipi_to_others(cpu::IPI::MemChanged);
+            send_ipi();
         }
         r
     }

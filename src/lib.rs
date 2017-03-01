@@ -51,10 +51,9 @@ fn init_heap(mapper: &mut ::mem::MemoryMapper, frame_allocator: &mut ::mem::Fram
 
 }
 
-pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: I)
+pub fn rust_main<M, F>(mut mapper: M, mut frame_allocator: F)
     where M: mem::MemoryMapper + 'static,
-          F: mem::FrameAllocator + 'static,
-          I: Fn() -> platform::ArchPlatformServices
+          F: mem::FrameAllocator + 'static
 {
     init_heap(&mut mapper, &mut frame_allocator);
 
@@ -67,8 +66,9 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
     }
 
     let farc = Rc::new(frame_allocator);
-    let p_s = platform::PlatformServices {
-            scheduler: sched::Sched::new(),
+
+    unsafe{
+        platform::set_memory_services(platform::MemoryServices{
             mem_manager: Box::new(
                 self::mem::DefaultMemoryManagaer::new(
                     Box::new(mapper),
@@ -76,11 +76,14 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
                 )
             ), 
             frame_alloc: farc.clone(),
-            arch_services: None,
-            cpus : cpus,
-        };
+        });
+    }
     unsafe{
-        platform::set_platform_services(p_s);
+        platform::set_platform_services(platform::PlatformServices {
+            scheduler: sched::Sched::new(),
+            arch_services: platform::ArchPlatformServices::new(),
+            cpus : cpus,
+        });
     }
 
     // set current thread
@@ -90,12 +93,8 @@ pub fn rust_main<M, F, I>(mut mapper: M, mut frame_allocator: F, init_platform: 
     platform::get_platform_services().get_current_cpu().set_running_thread(Box::new(curth));
 
 
-    // TODO add the sched interrupt back, to be explicit
-    let arch_plat_services = init_platform();
-
-    unsafe {
-        platform::get_mut_platform_services().arch_services = Some(arch_plat_services);
-    }
+    // TODO add the sched interrupt back, to be explicit    
+    unsafe { platform::get_mut_platform_services().arch_services.init_platform() };
 
     // scheduler is ready ! we can use sync objects!
 
@@ -166,10 +165,14 @@ fn main_thread() {
             .spawn(move || {
                 loop {
                     platform::write_to_console("t1 started");
+                    platform::write_to_console("t1 acquire");
                     sema.acquire();
+                    platform::write_to_console("t1 acquireD");
+
                     platform::get_platform_services().get_scheduler().sleep(1000);
+                    platform::write_to_console("t1 release");
                     sema.release();
-                    platform::write_to_console("t1 sem acquired");
+                    platform::write_to_console("t1 sem releaseD");
                 }
             });
     }
@@ -183,13 +186,17 @@ fn main_thread() {
             .spawn(move || {
                 loop{
                     platform::write_to_console("t2 acquire semaphore");
+                    platform::write_to_console("t2 acquire");
                     sema.acquire();
+                    platform::write_to_console("t2 acquireD");
 
-                    platform::write_to_console("t2 sleep");
+                    platform::write_to_console("t2 sleep 1000");
                     platform::get_platform_services().get_scheduler().sleep(1000);
+                    platform::write_to_console("t2 slept");
 
-                    platform::write_to_console("t2 releasing semaphore");
+                    platform::write_to_console("t2 release");
                     sema.release();
+                    platform::write_to_console("t2 sem releaseD");
                 }
             });
     }

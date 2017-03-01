@@ -90,11 +90,11 @@ pub fn send_ipi(id : usize, ipi : ::cpu::IPI) {
 // This function will be called when we have a heap and a scheduler.
 pub fn init_board(pic : &mut pic::PIC< Box<pic::InterruptSource> , Rc<platform::Interruptable> >) -> PlatformServices {
 
-    unsafe { serial_base = platform::get_platform_services().mem_manager.p2v(serial::SERIAL_BASE_PADDR).unwrap() }
+    unsafe { serial_base = platform::get_memory_services().mem_manager.p2v(serial::SERIAL_BASE_PADDR).unwrap() }
 
     write_to_console("Welcome home!");
 
-    let mapper = &::platform::get_platform_services().mem_manager;
+    let mapper = &::platform::get_memory_services().mem_manager;
 
     let mut interrupt_source = Box::new(intr::PIC::new(mapper.p2v(intr::PIC_BASE_PADDR).unwrap()));
 

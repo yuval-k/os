@@ -13,4 +13,3 @@ pub use self::rpi2::*;
 pub mod rpi;
 #[cfg(feature = "board-rpi")]
 pub use self::rpi::*;
-

@@ -202,13 +202,13 @@ extern {
 // TODO make sure we have a scheduler..
 pub fn init_board(pic : &mut pic::PIC< Box<pic::InterruptSource>, Rc<platform::Interruptable> >) -> PlatformServices {
     
-    platform::get_platform_services().mem_manager.map_device(
+    platform::get_memory_services().mem_manager.map_device(
                     ARM_LOCAL_PSTART,
                     ARM_LOCAL_VSTART,
                     ARM_LOCAL_PEND - ARM_LOCAL_PSTART)
         .unwrap();
     
-    platform::get_platform_services().mem_manager.map_device(
+    platform::get_memory_services().mem_manager.map_device(
                     MMIO_PSTART,
                     MMIO_VSTART,
                     MMIO_PEND - MMIO_PSTART)
@@ -239,14 +239,12 @@ pub fn init_board(pic : &mut pic::PIC< Box<pic::InterruptSource>, Rc<platform::I
     //    wake other CPU(i)
     //    wait for CPU
 
-    let mem_manager = &::platform::get_platform_services().mem_manager;
+    let mem_manager = &::platform::get_memory_services().mem_manager;
     let fa = &::platform::get_platform_services().frame_alloc;
 
     let base = mem_manager.p2v(ARM_LOCAL_PSTART).unwrap();
         
     let mailboxes = mailbox::LocalMailbox::new();
-   // let mut pic = Box::new(pic::PIC::new());
-    let mut pic : pic::PIC< Box<pic::InterruptSource> , Rc<platform::Interruptable> > = pic::PIC::new();
   
 // part of cpu struct?
 
@@ -262,7 +260,7 @@ pub fn init_board(pic : &mut pic::PIC< Box<pic::InterruptSource>, Rc<platform::I
         corepic.disable(intr::Interrupts::PMU as usize);
         corepic.disable(intr::Interrupts::AXI as usize);
         corepic.disable(intr::Interrupts::LocalTimer as usize);
-
+// TODO:TODO:TODO:TODO:TODO:TODO:TODO: make sure each core only handles his own core pic interrupts
         let handle = pic.add_source( corepic ); //
         pic.register_callback_on_intr(handle, intr::Interrupts::Mailbox0 as usize, ipi_handler.clone());
         pic.register_callback_on_intr(handle, intr::Interrupts::CNTVIRQ as usize,timers[i].clone()); // dont init timer here, but from the cpecific cpu
@@ -321,10 +319,6 @@ pub fn init_board(pic : &mut pic::PIC< Box<pic::InterruptSource>, Rc<platform::I
     // TODO: once other cpus started, and signaled that they swiched to use page_table and waiting somewhere in kernel virtmem, continue
     // TODO: remove stub from skip ranges
 
-    let interrupts = InterHandler{pic:pic};
-
-    super::super::vector::get_vec_table().set_irq_callback(Box::new(interrupts));
-
     timers[0].start_timer();
     // TODO: scheduler should be somewhat available here..
     // TODO: setup gtmr
@@ -332,16 +326,6 @@ pub fn init_board(pic : &mut pic::PIC< Box<pic::InterruptSource>, Rc<platform::I
     PlatformServices{
         mailboxes : mailboxes,
         timers : timers,
-    }
-}
-
-struct InterHandler {
-    pic : pic::PIC<Box<pic::InterruptSource> , Rc<platform::Interruptable> >
-}
-
-impl platform::Interruptable for InterHandler {
-    fn interrupted(&self) {
-        self.pic.interrupted()
     }
 }
 

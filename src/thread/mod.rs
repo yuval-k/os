@@ -39,8 +39,8 @@ impl Thread {
         let stack_start = STACK_BASE.uoffset(oldcounter);
         let stack_end   = stack_start.uoffset(STACK_SIZE);
         // allocate to pages
-        let pv = platform::get_platform_services().frame_alloc.allocate(STACK_PAGES).unwrap();
-        platform::get_platform_services().mem_manager.map(
+        let pv = platform::get_memory_services().frame_alloc.allocate(STACK_PAGES).unwrap();
+        platform::get_memory_services().mem_manager.map(
            pv,
            stack_start,
            mem::MemorySize::PageSizes(STACK_PAGES)).expect("Can't map stack");

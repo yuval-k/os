@@ -122,7 +122,7 @@ impl CorePIC {
         Self::new_for_cpu(cpuid)
     }
     pub fn new_for_cpu(cpuid : usize) -> Self {
-        let vbase = ::platform::get_platform_services().mem_manager.p2v(PIC_BASE_PADDR).unwrap();
+        let vbase = ::platform::get_memory_services().mem_manager.p2v(PIC_BASE_PADDR).unwrap();
 
         CorePIC {
             vbase: vbase.uoffset(4*cpuid),

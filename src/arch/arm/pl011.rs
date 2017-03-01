@@ -128,17 +128,24 @@ pub struct PL011 {
 
 
 impl PL011 {
-    pub unsafe fn new(v: ::mem::VirtualAddress) -> &'static mut Self {
+    pub unsafe fn new(v: ::mem::VirtualAddress, uart_clock : u64, bps : u64) -> &'static mut Self {
         let p = &mut *(v.0 as *mut PL011);
 
         // disable all
         p.control.write(ControlFlags::empty());
 
-        p.integer_baud_rate.write(1);
-        p.fractional_baud_rate.write(40);
+        let scale = uart_clock/16;
+        let integer = scale / bps;
+        let reminder = scale % bps; 
+        // reminder / bps == fractional / 64
+        let fractional = 64*reminder/bps;
+
+        
+        p.integer_baud_rate.write(integer as u32);
+        p.fractional_baud_rate.write(fractional as u32);
         // update, as according to spec there are bits that should not be
         // modified
-        p.line_control.update(|line_control| { *line_control |= ENABLE_FIFO | WLEN_8; });
+        p.line_control.update(|line_control| { *line_control |= ENABLE_FIFO | WLEN_8 | PARITY_ENABLE | TWO_STOP_BITS_SELECT; });
 
         // clear all interrupts.. we are just starting!
         p.interrupt_clear.write(InterruptFlags::all());

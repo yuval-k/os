@@ -36,18 +36,33 @@ impl<T: Interruptable>  InterruptableWithContext for T {
   }
 }
 
+pub struct MemoryServices {
+// TODO: remove box and rc from here
+    pub mem_manager: Box<::mem::MemoryManagaer>, 
+    pub frame_alloc: Rc<::mem::FrameAllocator>,
+}
 
 pub struct PlatformServices {
     pub scheduler: super::sched::Sched,
-    pub mem_manager: Box<::mem::MemoryManagaer>, 
-    pub frame_alloc: Rc<::mem::FrameAllocator>,
-    pub arch_services: Option<ArchPlatformServices>,
     pub cpus : Vec<::cpu::CPU>,
-
+    pub arch_services: ArchPlatformServices,
 }
 
 static mut PLATFORM_SERVICES: Option<UnsafeCell<PlatformServices>> = None;
+static mut MEMORY_SERVICES: Option<UnsafeCell<MemoryServices>> = None;
 
+pub unsafe fn set_memory_services(p: MemoryServices) {
+      MEMORY_SERVICES = Some(UnsafeCell::new(p));
+}
+
+pub fn get_memory_services() -> &'static MemoryServices {
+    unsafe {
+        match MEMORY_SERVICES {
+            Some(ref x) => &*x.get(),
+            None => panic!("platform services are note INITIALIZED!"),
+        }
+    }
+}
 pub unsafe fn set_platform_services(p: PlatformServices) {
       PLATFORM_SERVICES = Some(UnsafeCell::new(p));
 }

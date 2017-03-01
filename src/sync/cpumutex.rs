@@ -2,13 +2,12 @@ use core::sync::atomic;
 use core::default::Default;
 use core::ops::{Drop, Deref, DerefMut};
 use core::marker::Sync;
-use core::cell::{UnsafeCell,Cell};
+use core::cell::{UnsafeCell};
 
 use platform;
 
 pub struct CpuMutex<T: ?Sized>{
     owner : atomic::AtomicIsize,
-    recursion : Cell<usize>,
     data: UnsafeCell<T>,
 }
 
@@ -19,7 +18,6 @@ impl<T> CpuMutex<T> {
     pub const fn new(user_data: T) -> Self {
         CpuMutex{
             owner : atomic::AtomicIsize::new(-1),
-            recursion : Cell::new(0),
             data: UnsafeCell::new(user_data),
         }
     }
@@ -45,8 +43,7 @@ impl<T: ?Sized> CpuMutex<T> {
     fn obtain_lock(&self) {
         let curcpu = ::platform::get_current_cpu_id() as isize;
         if self.owner.load(atomic::Ordering::Acquire) == curcpu {
-            self.recursion.set(self.recursion.get() + 1);
-            return
+            panic!("double locking happened!")
         }
         platform::memory_read_barrier();
 
@@ -56,7 +53,6 @@ impl<T: ?Sized> CpuMutex<T> {
                 // TODO: add arm yield?
             }
         }
-        self.recursion.set(1);
     }
 
 
@@ -66,10 +62,6 @@ impl<T: ?Sized> CpuMutex<T> {
         if lockedcpu != curcpu {
             // this is a bug!
             panic!("cpu release lock owner mismatch!")
-        }
-        self.recursion.set(self.recursion.get() - 1);
-            if self.recursion.get() > 0 {
-                return
         }
 
         platform::memory_write_barrier();

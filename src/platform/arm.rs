@@ -13,7 +13,10 @@ pub use ::arch::arm::thread::new_thread;
 pub use ::arch::arm::thread::switch_context;
 pub use ::arch::arm::ticks_in_second;
 pub use ::arch::arm::cpu::get_current_cpu_id;
+
+#[cfg(feature = "multicpu")]
 pub use ::arch::arm::send_ipi;
+
 pub use ::arch::arm::get_num_cpus;
 
 pub type ArchPlatformServices = ::arch::arm::PlatformServices;

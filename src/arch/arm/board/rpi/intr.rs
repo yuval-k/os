@@ -11,6 +11,10 @@ pub const PIC_IRQ_BASE_VADDR: ::mem::VirtualAddress = PIC_BASE_VADDR.uoffset(0x2
 
 
 pub enum Interrupts {
+    TIMER0 =         0,
+    TIMER1 =         1,
+    TIMER2 =         2,
+    TIMER3 =         3,
     AUX =            29,
     I2C_SPI_SLV =    43,
     PWA0 =           45,
@@ -28,10 +32,10 @@ pub enum Interrupts {
 
 bitflags! {
     #[repr(C,packed)] flags PicFlags1: u32 {
-        const UNKNOWN0 =        1 << 0,
-        const UNKNOWN1 =        1 << 1,
-        const UNKNOWN2 =        1 << 2,
-        const UNKNOWN3 =        1 << 3,
+        const TIMER0   =        1 << (Interrupts::TIMER0 as usize),
+        const TIMER1   =        1 << (Interrupts::TIMER1 as usize),
+        const TIMER2   =        1 << (Interrupts::TIMER2 as usize),
+        const TIMER3   =        1 << (Interrupts::TIMER3 as usize),
         const UNKNOWN4 =        1 << 4,
         const UNKNOWN5 =        1 << 5,
         const UNKNOWN6 =        1 << 6,
@@ -164,7 +168,7 @@ impl PICDev {
         match intr_num {
             0 ... 31  =>  (PicFlagsBasic::empty(), PicFlags1::from_bits_truncate(1 << intr_num), PicFlags2::empty()),
             32 ... 63 => ( PicFlagsBasic::empty(), PicFlags1::empty(), PicFlags2::from_bits_truncate(1 << (intr_num - 32))),
-            64 ... 95 => (PicFlagsBasic::from_bits_truncate(1 << (intr_num - 64)), PicFlags1::empty(),  PicFlags2::empty()),
+            64 ... 71 => (PicFlagsBasic::from_bits_truncate(1 << (intr_num - 64)), PicFlags1::empty(),  PicFlags2::empty()),
             _ => panic!("unknown interrupt number"),
         }
     }
@@ -172,8 +176,8 @@ impl PICDev {
 
 impl pic::InterruptSource for PICDev {
 
-    fn len(&self) -> usize {
-         32*3
+    fn range(&self) -> (usize,usize) {
+         (0,32*2+8)
     }
 
     fn enable(&self, interrupt : usize) {

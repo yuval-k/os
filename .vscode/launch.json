@@ -2,6 +2,49 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "type": "cppdbg",
+            "request": "launch",
+            /*
+            "customLaunchSetupCommands": [
+                {
+                    "text": "target remote localhost:1234",
+                    "ignoreFailures": false
+                },
+                {
+                    "text": "symbol-file ./target/kernel.elf",
+                    "ignoreFailures": false
+                }
+            ],
+            */
+            "setupCommands": [
+                {
+                    "text": "symbol-file ./target/kernel.elf",
+                    "ignoreFailures": false
+                },
+                {
+                    "text": "set $pc = 0x8000",
+                    "description": "get over qemu bug",
+                    "ignoreFailures": false
+                }
+            ],
+            "name": "c++ debug qemu",
+            "program": "${workspaceRoot}/target/kernel.elf",
+            "miDebuggerServerAddress": "localhost:1234",
+            "miDebuggerPath": "${workspaceRoot}/gdb-native",
+            "sourceFileMap": {
+                "/buildslave/rust-buildbot/slave/nightly-dist-rustc-cross-host-linux/build/src": "/home/yuval/.multirust/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/src"
+            },
+            "cwd": "${workspaceRoot}",
+            "targetArchitecture": "arm",
+            "stopAtEntry": true,
+            "logging": {
+                "trace": true,
+                "traceResponse": true,
+                "engineLogging": true
+            }
+
+        },
+        {
             "type": "gdb",
             "request": "attach",
             "remote": true,
@@ -19,12 +62,13 @@
             "type": "gdb",
             "request": "attach",
             "remote": true,
-            "executable": "./target/kernel.img",
+            "executable": "./target/kernel.elf",
             "target": "localhost:1234",
             "cwd": "${workspaceRoot}",
             "gdbpath": "${workspaceRoot}/gdb-native",
             "autorun": [
-                "symbol-file ./target/kernel.img"
+                "set substitute-path /buildslave/rust-buildbot/slave/nightly-dist-rustc-cross-host-linux/build/src /home/yuval/.multirust/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/src",
+                "symbol-file ./target/kernel.elf"
             ]
         }
     ]

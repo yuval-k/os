@@ -10,8 +10,9 @@ use io::Write;
 pub use device::spi::ClockPhase;
 pub use device::spi::ClockPolarity;
 pub use device::spi::Hz;
+pub use device::spi::Transfer;
 
-struct Transfer {
+struct TransferState {
     transfer : device::spi::Transfer,
     bytes_read  : usize,
     bytes_written : usize,
@@ -22,7 +23,7 @@ pub struct SPIDev {
 }
 struct SPIDevImpl {
     spi : &'static mut spi::SPI,
-    cur_transfer : Option<Transfer>
+    cur_transfer : Option<TransferState>
 }
 
 
@@ -68,7 +69,7 @@ impl device::spi::SPIMaster for SPIDev {
             return Err(())
         }
 
-        let t = Transfer {
+        let t = TransferState {
             transfer : t,
             bytes_read  : 0,
             bytes_written : 0,

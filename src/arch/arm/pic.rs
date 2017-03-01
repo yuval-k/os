@@ -1,75 +1,141 @@
 use collections::Vec;
+use collections::boxed::Box;
 use platform;
-use core::borrow::Borrow;
+use sync::CpuMutex;
 
 
 pub trait InterruptSource {
-    fn len(&self) -> usize;
+    fn range(&self) -> (usize,usize);
     fn enable( &self, interrupt : usize);
     fn disable(&self, interrupt : usize);
     fn is_interrupted(&self, interrupt : usize) -> bool;
 }
 
-pub struct PIC<InterruptSourceT: Borrow<InterruptSource>, InterruptableT: Borrow<platform::Interruptable>  >{
-    sources : Vec<InterruptSourceT>,
-    callbacks : Vec<Option<InterruptableT>>,
+#[derive(Clone, Copy)]
+struct InterruptState {
+    driver_handle : Option<super::DriverHandle>,
+    is_enabled : bool,
 }
 
-#[derive(Clone,Copy)]
-pub struct InterruptSourceHandle(usize);
+impl InterruptState {
+    fn new() -> Self {
+        InterruptState{
+            driver_handle : None,
+            is_enabled : false,
+        }
+    }
+}
 
+pub struct PIC {
+    sources : CpuMutex<Vec<Box<InterruptSource>>>,
+    callbacks :  CpuMutex<Vec<InterruptState>>,
+}
 
-impl<InterruptSourceT: Borrow<InterruptSource>, InterruptableT: Borrow<platform::Interruptable> >  PIC<InterruptSourceT, InterruptableT> {
-    pub fn new() -> PIC<InterruptSourceT, InterruptableT> {
+pub struct InterruptAttachment {
+    num : usize,
+}
+
+impl InterruptAttachment {
+    pub fn new(num : usize ,driver : super::DriverHandle) -> Self {
+        platform::get_platform_services().arch_services.interrupt_service.register_callback_on_intr(num, driver);
+        InterruptAttachment {
+            num : num
+        }
+    }
+}
+/*
+
+impl Drop for InterruptAttachment {
+    fn drop(&mut self) {
+        platform::get_platform_services().arch_services.interrupt_service.unregister_callback_on_intr(self.num)
+    }
+}
+*/
+
+/*
+pub fn foo() {
+    borrow pic
+    ?? static
+    // BM stuff: finish board with: points for rgb, programming header for isp / ftdi; pro mini shield mode?
+    // goal is to test communication with 10w LED under various conditions    
+}
+*/
+
+// TODO: maybe change to iterators?!
+
+impl PIC {
+    pub fn new() -> PIC {
         PIC { 
-            sources : vec![],
-            callbacks : vec![],
+            sources :  CpuMutex::new(vec![]),
+            callbacks : CpuMutex::new(vec![]),
         }
     }
 
-    pub fn add_source(&mut self, is : InterruptSourceT) -> InterruptSourceHandle {
-        {   let is : &InterruptSource = is.borrow();
-            for _ in 0..is.len() {
-                self.callbacks.push(None);
+    pub fn add_source<T : InterruptSource + 'static> (&self, is : T) {
+        {
+            let mut v = self.callbacks.lock();
+            let (_, end) = is.range();
+            let cursize = v.len();
+            for _ in cursize..end {
+                v.push(InterruptState::new());
             }
         }
-        self.sources.push(is);
-        InterruptSourceHandle(self.sources.len() - 1)
+        let mut sources = self.sources.lock();
+        sources.push(Box::new(is));
     }
 
-    pub fn register_callback_on_intr(&mut self, h : InterruptSourceHandle, interrupt : usize, handler : InterruptableT) {
+    pub fn register_callback_on_intr(&self, interrupt : usize, driver : super::DriverHandle) {
         // find callback index:
-        let ci = self.get_callback_index(h.0, interrupt);
-        self.callbacks[ci] = Some(handler);
+        let mut v = self.callbacks.lock();
+        v[interrupt].driver_handle = Some(driver);
     }
 
-    fn get_callback_index(&self, source_index : usize, interrupt : usize) -> usize {
-        let mut ci = 0;
-        for is in &self.sources[..source_index] {
-            let is : &InterruptSource = is.borrow();
-            ci += is.len();
+    pub fn enable_registered(&self) {
+        // find callback index:
+        let mut callbacks = self.callbacks.lock();
+        let mut callbacks : &mut Vec<InterruptState> = &mut callbacks;
+        
+        for (i,is) in callbacks.iter_mut().enumerate().filter(|&(_, ref is)|is.driver_handle.is_some()) {
+            is.is_enabled = true;
+            self.enable_interrupt(i);
         }
-        ci += interrupt;
-        ci
     }
+
+    pub fn enable_interrupt(&self, interrupt : usize) {
+        // find callback index:
+        let sources = self.sources.lock();
+        for source in sources.iter() { 
+            let (start,end) = source.range();
+            if (interrupt >= start) && (interrupt < end) {
+                source.enable(interrupt);
+                return;
+            }
+        }
+    }
+
 }
 
-impl<InterruptSourceT: Borrow<InterruptSource> , InterruptableT: Borrow<platform::Interruptable> >  platform::Interruptable for PIC<InterruptSourceT, InterruptableT> {
+impl platform::Interruptable for PIC {
     fn interrupted(&self) {
-        let mut source_index : usize = 0;
-        for is in &self.sources {
-            let is : &InterruptSource = is.borrow();
-            for intr in 0..(is.len()) {
-                if is.is_interrupted(intr) {
-                    let idx = self.get_callback_index(source_index, intr);
-                    if let Some(ref cb) = self.callbacks[idx] {
-                        cb.borrow().interrupted();
-                    } else {
-                        panic!("unexpected interrupt")
+        // TODO remove cpu mutex ASAP! this makes interrupt handling not happen in 
+        // parallel which is shit!
+        let sourceslock = self.sources.lock();
+        let sources : &Vec<Box<InterruptSource>> = sourceslock.as_ref();
+        for is in sources {
+            let (start, end) = is.range();
+            for intr in start..end {
+
+                if is.is_interrupted(intr)  {
+                    let intrstate = {self.callbacks.lock()[intr]};
+                    if intrstate.is_enabled {
+                        if let Some(cb) = intrstate.driver_handle {
+                            platform::get_platform_services().arch_services.driver_manager.driver_interrupted(cb);
+                        } else {
+                            panic!("unexpected interrupt")
+                        }
                     }
                 }
             }
-            source_index += 1;
         }
     }
 }

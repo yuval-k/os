@@ -51,7 +51,20 @@ pub struct SPI  {
    pub ltoh : volatile::Volatile<u32>,
    pub dc : volatile::Volatile<u32>,
 }
+/*
+fn pic_register(&mut self, inthandle : &IntrHandle<'a>) Attachment<'a> {
 
+}
+*/
+/*
+impl Driver for SPI {
+    fn attach(&mut self, dh : DriverHandle){
+        let intrnum : usize;
+        self.attachment = pic.register(intrnum, dh);
+        self.attachment = fsnode.register(dh);
+    }
+}
+*/
 
 impl SPI { 
     pub unsafe fn new() -> &'static mut Self {
@@ -80,7 +93,6 @@ impl SPI {
 
         Ok(())
     }
-
 }
 
 impl io::WriteFifo for SPI {

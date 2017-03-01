@@ -26,6 +26,10 @@ impl Drop for InterruptGuardOneShot {
     }
 }
 
+
+#[cfg(not(feature = "multicpu"))]
+unsafe impl<T: ?Sized + Send> Sync for InterruptGuard<T> {}
+
 pub struct InterruptGuard<T: ?Sized> {
     data: UnsafeCell<T>,
 }

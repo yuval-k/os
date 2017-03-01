@@ -2,5 +2,7 @@ set substitute-path /buildslave/rust-buildbot/slave/nightly-dist-rustc-cross-hos
 
 symbol-file ./target/kernel.elf
 
-target remote localhost:1234
+# target remote localhost:1234
+target remote 192.168.1.20:3333
+continue
 

@@ -56,7 +56,7 @@ const LOCAL_MBOX_ADDR : ::mem::PhysicalAddress = ::mem::PhysicalAddress(super::A
 
 impl LocalMailbox {
     pub fn new() -> Self {
-        let base = ::platform::get_platform_services().mem_manager.p2v(LOCAL_MBOX_ADDR).unwrap();
+        let base = ::platform::get_memory_services().mem_manager.p2v(LOCAL_MBOX_ADDR).unwrap();
         LocalMailbox { 
             mailboxes: [CpuLocalMailbox::new(base.uoffset(0x10*0)),
                         CpuLocalMailbox::new(base.uoffset(0x10*1)),

@@ -11,13 +11,15 @@ pub mod pl011;
 
 pub use self::board::write_to_console;
 pub use self::board::ticks_in_second;
+
+#[cfg(feature = "multicpu")]
 pub use self::board::send_ipi;
+
 pub use ::platform;
 use core::ops;
-use collections::boxed::Box;
 use alloc::rc::Rc;
-
-
+use collections::boxed::Box;
+use collections::Vec;
 
 #[cfg(feature = "multicpu")]
 pub fn get_num_cpus() -> usize {
@@ -38,7 +40,7 @@ pub fn build_mode_stacks() {
 }
 
 fn init_vectors() {
-    platform::get_platform_services().mem_manager.map(
+    platform::get_memory_services().mem_manager.map(
              ::mem::PhysicalAddress(0),
              vector::VECTORS_ADDR,
              ::mem::MemorySize::PageSizes(1))
@@ -46,17 +48,6 @@ fn init_vectors() {
     vector::init_interrupts();
     build_mode_stacks();
 }
-
-struct InterHandler {
-    pic : pic::PIC<Box<pic::InterruptSource> , Rc<platform::Interruptable>>
-}
-
-impl platform::Interruptable for InterHandler {
-    fn interrupted(&self) {
-        self.pic.interrupted()
-    }
-}
-
 
 pub fn arm_main(
     ml : self::mem::MemLayout, 
@@ -87,35 +78,135 @@ pub fn arm_main(
 
     // undefined instruction to test
     //   unsafe{asm!(".word 0xffffffff" :: :: "volatile");}
-    let initplat = || {
-
-        // init intr and build mode stacks
-        // TODO: add check if done, and do if not  build_mode_stacks(& mut mapper, &mut frame_allocator);
-
-        // init and map vector tables - we don't supposed to have to do this now, but it makes debugging easier..
-        init_vectors();
-
-        
-        let mut pic : pic::PIC< Box<pic::InterruptSource> , Rc<platform::Interruptable>> = pic::PIC::new();
-        let board_services = self::board::init_board(&mut pic);
-
-        let interrupts = InterHandler{pic:pic};
-        self::vector::get_vec_table().set_irq_callback(Box::new(interrupts));
-        
-        // init board
-        PlatformServices {
-            board_services: board_services 
-        }
-    };
-    ::rust_main(page_table, frame_allocator, initplat);
+    ::rust_main(page_table, frame_allocator);
 
     loop {}
 }
 
-pub struct PlatformServices {
-    board_services: self::board::PlatformServices,
+pub trait Driver{
+    fn attach(&mut self, d : DriverHandle);
 }
 
+
+
+#[derive(Clone, Copy)]
+enum DriverHandleEnum {
+    Regular(usize),
+    Interruptable(usize),
+}
+
+#[derive(Clone, Copy)]
+pub struct DriverHandle(DriverHandleEnum);
+
+pub trait InterruptableDriver : Driver+platform::Interruptable {}
+
+pub struct DriverManager{
+    drivers : Vec<Box<Driver>>,
+    interruptable : Vec<Box<InterruptableDriver>>
+
+}
+
+impl DriverManager {
+
+    fn new() -> DriverManager {
+        DriverManager{
+            drivers : vec![],
+            interruptable : vec![],
+        }
+    }
+
+    fn attach_all(&mut self) {
+        for (i,d) in self.drivers.iter_mut().enumerate() {
+            d.attach(DriverHandle(DriverHandleEnum::Regular(i)));
+        }
+        for (i,d) in self.interruptable.iter_mut().enumerate() {
+            d.attach(DriverHandle(DriverHandleEnum::Interruptable(i)));
+        }
+    }
+
+    pub fn add_driver<T : Driver +'static>(&mut self, d : T) -> DriverHandle {
+      //  add_interruptable(self, d)
+      let dh = DriverHandle(DriverHandleEnum::Regular(self.drivers.len()));
+      self.drivers.push(Box::new(d));
+      dh
+    }
+    pub fn add_driver_interruptable<T : InterruptableDriver + 'static>(&mut self, d : T) -> DriverHandle {
+      //  add_interruptable(self, d)
+      let dh = DriverHandle(DriverHandleEnum::Interruptable(self.interruptable.len()));
+      self.interruptable.push(Box::new(d));
+      dh
+    }
+
+    fn driver_interrupted(&self, dh : DriverHandle) {
+        if let DriverHandleEnum::Interruptable(idx) = dh.0 {
+            self.interruptable[idx].interrupted();
+        } else {
+            panic!("driver not interruptable!")
+        }
+    }
+}
+
+/*
+impl DriverManager {
+    fn get_interruptable(dh) -> &Interruptable {
+
+    }
+
+    fn get_fs_node(dh) -> &Interruptable {
+
+    }
+
+}
+*/
+
+pub struct PlatformServices {
+    board_services: self::board::PlatformServices,
+    pub driver_manager : DriverManager,
+    interrupt_service : self::pic::PIC,
+}
+
+impl PlatformServices {
+    pub fn new() -> Self {
+        PlatformServices {
+            board_services:  self::board::PlatformServices::new(),
+            driver_manager : DriverManager::new(),
+            interrupt_service : pic::PIC::new(),
+        }
+    }
+
+    pub fn init_platform(&mut self) {
+         init_vectors();
+
+        self.board_services.init_board();
+
+        // we should have all drivers initialized
+        self.driver_manager.attach_all();
+
+        let interrupts = InterHandler::new();
+        self::vector::get_vec_table().set_irq_callback(Box::new(interrupts));
+
+        self.interrupt_service.enable_registered();
+    }
+}
+
+
+struct InterHandler {
+}
+
+
+impl InterHandler {
+    fn new() -> Self {
+        InterHandler{
+
+        }
+    }
+}
+
+impl platform::Interruptable for InterHandler {
+    fn interrupted(&self) {
+        platform::get_platform_services().arch_services.interrupt_service.interrupted()
+    }
+}
 
 #[allow(non_snake_case)]
 #[no_mangle]

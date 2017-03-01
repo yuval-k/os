@@ -30,7 +30,8 @@ impl CPU {
     pub fn id(&self) -> usize {
         self.id
     }
-    
+
+    #[cfg(feature = "multicpu")]
     pub fn send_ipi_to_others(&self, ipi : IPI) {
                     
         let cpus = & ::platform::get_platform_services().cpus;
@@ -39,10 +40,12 @@ impl CPU {
         }
     }
 
+    #[cfg(feature = "multicpu")]
     pub fn interrupt(&self, ipi : IPI) {
         ::platform::send_ipi(self.id, ipi);
     }
-
+    
+    #[cfg(feature = "multicpu")]
     pub fn interrupted(&self, ipi : IPI) {
         match ipi {
             IPI::MemChanged => ::platform::invalidate_tlb(),

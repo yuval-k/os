@@ -19,8 +19,12 @@ impl Serial {
         gpio.set_function(GPIOTX, gpio::FunctionSelect::Function0);
         gpio.set_function(GPIORX, gpio::FunctionSelect::Function0);
 
+        // some reason the scope showed it pulled up.. gonna not pull it up
+        gpio.set_pullup_pulldown(GPIORX, gpio::OFF);
+        gpio.set_pullup_pulldown(GPIOTX, gpio::OFF);
+
         let s = unsafe { // TODO: init gpio..
-            Serial{ pl : pl011::PL011::new(SERIAL_BASE_VADDR)}
+            Serial{ pl : pl011::PL011::new(SERIAL_BASE_VADDR, 3_000_000, 115200)}
         };
 
         s

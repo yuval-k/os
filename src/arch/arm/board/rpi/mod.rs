@@ -1,3 +1,4 @@
+pub mod timer;
 pub mod serial;
 pub mod stub;
 pub mod intr;
@@ -155,59 +156,81 @@ pub fn write_to_console(s: &str) {
 
 }
 
-pub fn send_ipi(_ : usize, _ : ::cpu::IPI) {
-}
-
 pub struct PlatformServices {
 //    pic : Box<pic::PIC>
+    gpio :  &'static mut self::gpio::GPIO,
+    spi : spi::SPIDev,
 }
 
-// This function should be called when we have a heap and a scheduler.
-// TODO make sure we have a scheduler..
-pub fn init_board(pic : &mut pic::PIC< Box<pic::InterruptSource> , Rc<platform::Interruptable> >) -> PlatformServices {
-    
-    
-    platform::get_platform_services().mem_manager.map_device(
+impl PlatformServices{
+
+    // called when memory is initialized.
+    pub fn new() -> Self {
+    platform::get_memory_services().mem_manager.map_device(
                     MMIO_PSTART,
                     MMIO_VSTART,
                     MMIO_PEND - MMIO_PSTART)
         .unwrap();
 
-   // unsafe { serial_base = page_table.p2v(serial::SERIAL_BASE_PADDR).unwrap() }
 
-    // gpio mapped, we can enable JTAG pins!
-  //  enable_debugger();
-
-
-
-    register_interrupts(pic);
-  
-
-    write_to_console("Welcome home!");
- 
-    PlatformServices{
-    }
-}
-
-pub fn register_interrupts(pic : &mut pic::PIC< Box<pic::InterruptSource> , Rc<platform::Interruptable> > ) {
-  let handle = pic.add_source(Box::new(self::intr::PICDev::new()));
 
   let gpio = unsafe{gpio::GPIO::new()};
-  let serial = serial::Serial::new(gpio);
 
   // TODO: support PL interrupts: pic.register_callback_on_intr(handle, intr::Interrupts::UART as usize, serial.clone());
     unsafe {
-      device::serial::set_serial(Box::new(io::BusyWaitWriter::new(serial)));
-  }
+            PlatformServices{
+                gpio : gpio,
+                spi : spi::SPIDev::new(),
+            }
+        }
+    }
 
-  let spi = spi::SPIDev::new();
-  let spi = Rc::new(spi);
-  pic.register_callback_on_intr(handle, intr::Interrupts::SPI as usize, spi.clone());
-  unsafe {
-      device::spi::set_spi_master(spi);
-  }
-  // TODO add timer
+    // called futher down the init phase, after all hardware was initialized
+    pub fn init_board(&mut self) {
 
-//    pic.register_callback_on_intr(handle, intr::Interrupts::SPI, );
+        let sourcehandle = &platform::get_platform_services().arch_services.interrupt_service.add_source(self::intr::PICDev::new());
+        let dm = unsafe{&mut platform::get_mut_platform_services().arch_services.driver_manager};
+        dm.add_driver_interruptable(timer::SystemTimerDriver::new());
 
+
+      //  self.register_interrupts(pic);
+
+        write_to_console("Welcome home!");
+    }
+
+
+
+//     pub fn register_interrupts( ) {
+
+//     let mut stimer = self.systemTimer.no_interrupts();
+//     let curval = stimer.counter_low.read();
+//     stimer.`set_match(timer::Matches::Match0, curval+100_000);
+//     stimer.enable_match(timer::Matches::Match0);
+
+//     let handle = pic.add_source(Box::new(self::intr::PICDev::new()));
+
+//     let serial = serial::Serial::new(self.gpio);
+
+//     // TODO: support PL interrupts: pic.register_callback_on_intr(handle, intr::Interrupts::UART as usize, serial.clone());
+//     unsafe {
+//         device::serial::set_serial(Box::new(io::BusyWaitWriter::new(serial)));
+//     }
+
+//     pic.register_callback_on_intr(handle, intr::Interrupts::TIMER0 as usize,  );
+//     unsafe {
+//         device::spi::set_spi_master(spi);
+//     }
+// /*
+//     pic.register_callback_on_intr(handle, intr::Interrupts::SPI as usize, spi.clone());
+//     unsafe {
+//         device::spi::set_spi_master(spi);
+//     }
+// */
+
+//     // TODO add timer
+
+//     //    pic.register_callback_on_intr(handle, intr::Interrupts::SPI, );
+
+//     }
+    
 }
