@@ -5,6 +5,7 @@ use arch::arm::Driver;
 use arch::arm::DriverHandle;
 use arch::arm::InterruptableDriver;
 use core::cell::RefCell;
+use collections::boxed::Box;
 
 const SYS_TIMER_BASE_VADDR: ::mem::VirtualAddress = super::MMIO_VSTART.uoffset(0x3000);
 
@@ -12,7 +13,7 @@ const TIMER_HZ : u32 = 1000_000;
 
 pub enum Matches {
 // can't use timers 0 and 2 as they are reservered for GPU
-//	Match0,
+//	Match0,0x1000_0000
 	Match1 = 1,
 //	Match2,
 	Match3 = 3,
@@ -55,7 +56,7 @@ impl SystemTimer {
 	}
 
 	pub fn add_to_match(&mut self, m : Matches, v : u32) {
-		self.compares[m as usize].write(self.counter_low.read().wrapping_add(v) & 0xF);
+		self.compares[m as usize].write(self.counter_low.read().wrapping_add(v));
 	}
 	
 	pub fn set_match(&mut self, m : Matches, v : u32) {
@@ -66,12 +67,15 @@ impl SystemTimer {
 
 pub struct SystemTimerDriver {
     timer : RefCell<&'static mut SystemTimer>,
+    callback:  Box<Fn()>,
+
 }
 
 impl SystemTimerDriver {
-    pub fn new() -> Self {
+    pub fn new(callback: Box<Fn()>) -> Self {
         SystemTimerDriver {
-            timer : RefCell::new(unsafe{SystemTimer::new()})
+            timer : RefCell::new(unsafe{SystemTimer::new()}),
+            callback : callback,
         }
     }
 
