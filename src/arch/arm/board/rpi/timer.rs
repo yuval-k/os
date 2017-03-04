@@ -52,7 +52,7 @@ impl SystemTimer {
     }
 
 	pub fn clear_match(&mut self, m : Matches) {
-		self.control_status.update(|cs|{cs.insert(matchToFlag(m)) })
+		self.control_status.write(matchToFlag(m))
 	}
 
 	pub fn add_to_match(&mut self, m : Matches, v : u32) {
@@ -103,6 +103,7 @@ impl Driver for SystemTimerDriver {
 }
 impl platform::Interruptable for SystemTimerDriver {
     fn interrupted(&self) {
+        (self.callback)();
         // 100ms
         self.add_to_match(100_000);
         self.clear();
