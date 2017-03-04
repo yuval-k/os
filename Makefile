@@ -9,12 +9,14 @@ TARGET ?= armv7-unknown-linux-gnueabihf
 MACHINE=raspi2 -smp 4
 QEMU=qemu-system-arm
 RUSTCFLAGS=
+KERN_TYPE=raw
 endif
 
 ifeq ($(BOARD),rpi)
 # TODO later change to something with floats
 TARGET ?= arm-unknown-linux-gnueabi
-RUSTCFLAGS=-Ctarget-cpu=arm1176jz-s
+RUSTCFLAGS=-Ctarget-cpu=arm1176jzf-s
+KERN_TYPE=raw
 endif
 
 ifeq ($(BOARD),integrator)
@@ -22,6 +24,7 @@ TARGET ?= arm-unknown-linux-gnueabi
 MACHINE=integratorcp -m 128 -cpu arm1176
 QEMU=qemu-system-arm
 RUSTCFLAGS=-Ctarget-cpu=arm1176jz-s
+KERN_TYPE=elf
 endif
 
 
@@ -33,7 +36,8 @@ os_lib=target/$(TARGET)/debug/libos.a
 glue=src/arch/$(ARCH)/board/$(BOARD)/glue.c
 glue_object=target/$(TARGET)/glue.o
 
-LIB_COMPILER=$(shell find  ~/.multirust/ -name $(TARGET))/lib/libcompiler_builtins*.rlib
+CHANNEL=nightly
+LIB_COMPILER=$(shell find  ~/.multirust/ -name $(TARGET)|grep $(CHANNEL))/lib/libcompiler_builtins*.rlib
 
 
 AS=$(TARGET)-as
@@ -44,14 +48,14 @@ OBJCOPY=$(TARGET)-objcopy
 
 .PHONY: toolchain
 toolchain:
-	rustup override add nightly
+	rustup override set $(CHANNEL)
 	rustup target add $(TARGET)
 	
 emulate: target/kernel.elf
 	$(QEMU) -machine $(MACHINE) -kernel target/kernel.elf -serial stdio -s
 
 emulate-debug: target/kernel.raw
-	$(QEMU) -machine $(MACHINE) -kernel target/kernel.raw -serial stdio -s -S
+	$(QEMU) -machine $(MACHINE) -kernel target/kernel.$(KERN_TYPE) -serial stdio -s -S
 
 .PHONY: cargo
 cargo:

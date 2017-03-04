@@ -62,9 +62,19 @@ extern "C" fn vector_with_context(ctx : &InterruptContext) {
         add r0, r0, 4
         /* load spsr */
         ldmia r0!, {r1}
-        mrs r1, spsr
+        msr spsr, r1
         /* restore registers, pc and cpsr (from spsr) */
         ldmia r0, {r0-r12, pc}^
+        /* 
+        sprinkle nops just in case..
+         */
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
         "
         :: "r"(&c)
         :: "volatile")

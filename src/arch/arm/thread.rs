@@ -85,6 +85,13 @@ extern "C" fn switch_context2(current_context: *mut Context, new_context: *const
             mov r0, r2
             mov r1, r3
             bx lr
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
           ":: "i"( SP_OFFSET ) :: "volatile")
     };
 
@@ -96,7 +103,7 @@ extern "C" fn switch_context2(current_context: *mut Context, new_context: *const
 
 /* machine independt code in the scheduler will enable interrupts enable interrupts for new thread, as cspr is at unknown state..*/
 #[no_mangle]
-extern "C" fn new_thread_trampoline2(old_thread : *mut ::thread::Thread, new_thread : *mut ::thread::Thread) {
+extern "C" fn new_thread_trampoline(old_thread : *mut ::thread::Thread, new_thread : *mut ::thread::Thread) {
 
     assert!((super::cpu::get_cpsr() & super::cpu::MODE_MASK) == super::cpu::SUPER_MODE);
 
@@ -120,7 +127,14 @@ extern "C" fn new_thread_trampoline1() {
     unsafe {
         asm!("
         /* r0 and r1 contain old and new thread respectivly*/
-          b new_thread_trampoline2
+         b new_thread_trampoline
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
           "::
         :  : "volatile")
     };
@@ -142,7 +156,7 @@ pub fn new_thread(stack: ::mem::VirtualAddress)
 
     // store r14
     let mut stack = stack.offset(-4);
-    unsafe { volatile_store(stack.0 as *mut u32, new_thread_trampoline1 as u32); }
+    unsafe { volatile_store(stack.0 as *mut u32, new_thread_trampoline as u32); }
     // store r12
     stack = stack.offset(-4);
     unsafe { volatile_store(stack.0 as *mut u32, 0); }

@@ -2,6 +2,7 @@ use collections::Vec;
 use collections::boxed::Box;
 use platform;
 use sync::CpuMutex;
+use core::cell::RefCell;
 
 
 pub trait InterruptSource {
@@ -27,7 +28,7 @@ impl InterruptState {
 }
 
 pub struct PIC {
-    sources : CpuMutex<Vec<Box<InterruptSource>>>,
+    sources : RefCell<Vec<Box<InterruptSource>>>,
     callbacks :  CpuMutex<Vec<InterruptState>>,
 }
 
@@ -66,7 +67,7 @@ pub fn foo() {
 impl PIC {
     pub fn new() -> PIC {
         PIC { 
-            sources :  CpuMutex::new(vec![]),
+            sources :  RefCell::new(vec![]),
             callbacks : CpuMutex::new(vec![]),
         }
     }
@@ -80,7 +81,7 @@ impl PIC {
                 v.push(InterruptState::new());
             }
         }
-        let mut sources = self.sources.lock();
+        let mut sources = self.sources.borrow_mut();
         sources.push(Box::new(is));
     }
 
@@ -103,10 +104,13 @@ impl PIC {
 
     pub fn enable_interrupt(&self, interrupt : usize) {
         // find callback index:
-        let sources = self.sources.lock();
+        // TODO: shoul,d this be borrow read only?
+        // should enable\disable interrupt work in the middle of interrupted?
+        let sources = self.sources.borrow_mut();
         for source in sources.iter() { 
             let (start,end) = source.range();
             if (interrupt >= start) && (interrupt < end) {
+                // should enable be &self and not &mut self...? see above ^^
                 source.enable(interrupt);
                 return;
             }
@@ -117,9 +121,7 @@ impl PIC {
 
 impl platform::Interruptable for PIC {
     fn interrupted(&self) {
-        // TODO remove cpu mutex ASAP! this makes interrupt handling not happen in 
-        // parallel which is shit!
-        let sourceslock = self.sources.lock();
+        let sourceslock = self.sources.borrow();
         let sources : &Vec<Box<InterruptSource>> = sourceslock.as_ref();
         for is in sources {
             let (start, end) = is.range();

@@ -3,6 +3,10 @@ use platform;
 use alloc::rc::Rc;
 use collections::boxed::Box;
 
+use arch::arm::InterruptableDriver;
+use arch::arm::Driver;
+use arch::arm::DriverHandle;
+
 // section 4.9.2 in: http://infocenter.arm.com/help/topic/com.arm.doc.dui0159b/DUI0159B_integratorcp_1_0_ug.pdf
 
 pub const TIMERS_BASE: ::mem::PhysicalAddress = ::mem::PhysicalAddress(0x1300_0000);
@@ -66,6 +70,15 @@ impl platform::Interruptable for Timer {
     fn interrupted(&self) {
         self.clear_interrupt();
         (self.callback)();
+    }
+}
+
+
+impl InterruptableDriver for Timer {}
+
+impl Driver for Timer {
+    fn attach(&mut self, dh : DriverHandle) {
+        platform::get_platform_services().arch_services.interrupt_service.register_callback_on_intr(super::intr::Interrupts::TIMERINT1 as usize, dh);
     }
 }
 

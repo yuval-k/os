@@ -88,7 +88,21 @@ pub fn send_ipi(id : usize, ipi : ::cpu::IPI) {
 
 
 // This function will be called when we have a heap and a scheduler.
-pub fn init_board(pic : &mut pic::PIC< Box<pic::InterruptSource> , Rc<platform::Interruptable> >) -> PlatformServices {
+
+impl PlatformServices{
+
+pub fn new() -> Self {
+    platform::get_memory_services().mem_manager.map_device(
+                    MMIO_PSTART,
+                    MMIO_VSTART,
+                    MMIO_PEND - MMIO_PSTART)
+        .unwrap();
+        PlatformServices{
+
+        }
+}
+
+pub fn init_board(&mut self) -> PlatformServices {
 
     unsafe { serial_base = platform::get_memory_services().mem_manager.p2v(serial::SERIAL_BASE_PADDR).unwrap() }
 
@@ -96,30 +110,23 @@ pub fn init_board(pic : &mut pic::PIC< Box<pic::InterruptSource> , Rc<platform::
 
     let mapper = &::platform::get_memory_services().mem_manager;
 
-    let mut interrupt_source = Box::new(intr::PIC::new(mapper.p2v(intr::PIC_BASE_PADDR).unwrap()));
-
+    let interrupt_source = intr::PIC::new(mapper.p2v(intr::PIC_BASE_PADDR).unwrap());
+    &platform::get_platform_services().arch_services.interrupt_service.add_source(interrupt_source);
 
     // start a timer
-    let mut tmr =
-        Box::new(timer::Timer::new(1, mapper.p2v(timer::TIMERS_BASE).unwrap(), Box::new(move||{::platform::get_platform_services().clock()})));
+    let mut tmr = timer::Timer::new(1, mapper.p2v(timer::TIMERS_BASE).unwrap(), Box::new(move||{::platform::get_platform_services().clock()}));
 
     // timer 1 is 1mhz
     let counter = 1_000_000 / (ticks_in_second as u32);
     tmr.start_timer(counter, true);
+    
+    let dm = unsafe{&mut platform::get_mut_platform_services().arch_services.driver_manager};
 
+    dm.add_driver_interruptable(tmr);
 
-    interrupt_source.enable(intr::Interrupts::TIMERINT1 as usize);
-
-    let mut pic : Box<pic::PIC< Box<pic::InterruptSource>, Box<platform::Interruptable>  > > = Box::new(pic::PIC::new());
-    let handle = pic.add_source(interrupt_source);
-    pic.register_callback_on_intr(handle, intr::Interrupts::TIMERINT1 as usize, tmr);
-
-    // TODO not move the pic to the vector table.
-    // as we will need to call it from other places to
-    // disable interrupts - perhaps add it to local cpu as well?
-    vector::get_vec_table().set_irq_callback(pic);
-
-    PlatformServices{
+    PlatformServices {
       //  pic: pic_
     }
+}
+
 }

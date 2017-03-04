@@ -67,8 +67,8 @@ pub struct PIC {
 }
 
 impl pic::InterruptSource for PIC {
-    fn len(&self) -> usize {
-        29
+    fn range(&self) -> (usize,usize) {
+        (0,29)
     }
 
     fn enable(&self, interrupt: usize) {
