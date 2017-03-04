@@ -120,27 +120,6 @@ extern "C" fn new_thread_trampoline(old_thread : *mut ::thread::Thread, new_thre
     }
 }
 
-// gets stack arg from non scratch regs
-#[naked]
-extern "C" fn new_thread_trampoline1() {
-
-    unsafe {
-        asm!("
-        /* r0 and r1 contain old and new thread respectivly*/
-         b new_thread_trampoline
-        nop
-        nop
-        nop
-        nop
-        nop
-        nop
-        nop
-          "::
-        :  : "volatile")
-    };
-
-}
-
 pub fn new_thread(stack: ::mem::VirtualAddress)
                   -> Context {
 

@@ -190,7 +190,7 @@ impl PlatformServices{
 
         let sourcehandle = &platform::get_platform_services().arch_services.interrupt_service.add_source(self::intr::PICDev::new());
         let dm = unsafe{&mut platform::get_mut_platform_services().arch_services.driver_manager};
-        dm.add_driver_interruptable(timer::SystemTimerDriver::new());
+        dm.add_driver_interruptable(timer::SystemTimerDriver::new( Box::new(move||{::platform::get_platform_services().clock()})));
 
 
       //  self.register_interrupts(pic);
