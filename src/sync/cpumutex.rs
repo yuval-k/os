@@ -31,12 +31,13 @@ pub struct CpuMutexGuard<'a, T: ?Sized + 'a> {
 
 impl<T: ?Sized> CpuMutex<T> {
     pub fn lock(&self) -> CpuMutexGuard<T> {
+        let block_interrupts =  platform::intr::no_interrupts();
        self.obtain_lock();
         CpuMutexGuard
         {
             mutex: &self,
             data: unsafe { &mut *self.data.get() },
-            interrupt_guard : platform::intr::no_interrupts(),
+            interrupt_guard : block_interrupts,
         }
     }
 

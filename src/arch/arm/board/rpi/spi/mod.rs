@@ -7,15 +7,25 @@ use device;
 use io::Read;
 use io::Write;
 
-pub use device::spi::ClockPhase;
-pub use device::spi::ClockPolarity;
-pub use device::spi::Hz;
-pub use device::spi::Transfer;
+use arch::arm::Driver;
+use arch::arm::DriverHandle;
+use arch::arm::InterruptableDriver;
+
+use device::spi::ClockPhase;
+use device::spi::ClockPolarity;
+use device::spi::Hz;
+use device::spi::Transfer;
 
 struct TransferState {
     transfer : device::spi::Transfer,
     bytes_read  : usize,
     bytes_written : usize,
+}
+
+impl TransferState {
+    pub fn done(self) {
+        self.transfer.done();
+    }
 }
 
 pub struct SPIDev {
@@ -43,16 +53,31 @@ impl SPIDev {
     }
 }
 
+impl InterruptableDriver for SPIDev {}
+
+impl Driver for SPIDev {
+    fn attach(&mut self, dh : DriverHandle) {
+        let interrupt_service = &platform::get_platform_services().arch_services.interrupt_service;
+        interrupt_service.register_callback_on_intr(super::intr::Interrupts::SPI as usize, dh);
+
+        // attach to fs node / spi node
+    }
+}
+
+
 impl device::spi::SPIMaster for SPIDev {
 
-    fn confiure(&mut self, clock_pol : ClockPolarity, clock_phase : ClockPhase, speed : Hz) -> Result<(),()>{
+    fn confiure(&self, c : device::spi::Configuration) -> Result<(),()>{
         let ig = platform::intr::no_interrupts();
         let mut spidev = self.dev_impl.lock();
-        spidev.spi.confiure(clock_pol, clock_phase, speed)
+        if spidev.cur_transfer.is_some() {
+            return Err(())
+        }
+        spidev.spi.confiure(c)
 
     }
 
-    fn start_transfer(&mut self, t : device::spi::Transfer) -> Result<(),()> {
+    fn start_transfer(&self, t : device::spi::Transfer) -> Result<(),()> {
         // enable TA and clear pipes.
         let mut cs_updates = spi::ControlStatusFlags::empty();
 
@@ -78,8 +103,9 @@ impl device::spi::SPIMaster for SPIDev {
         spidev.cur_transfer = Some(t);
         platform::memory_write_barrier();
 
+        // TODO : add chip select at  some point
+
         spidev.spi.control_status.update(|cs|{
-            cs.remove(spi::CS0);
             cs.remove(spi::CS1);
             cs.remove(spi::CS2);
             *cs |= cs_updates;
@@ -141,7 +167,9 @@ impl platform::Interruptable for SPIDev {
                     if let Ok(read) =  spidevspi.read(&mut transfer.transfer.buf[transfer.bytes_read..]) {
                         transfer.bytes_read += read;
                     }
+                    platform::memory_write_barrier();  // <- probably not needed for non SMP
                     // we are done, no need to place the transfer back.
+                    transfer.done();
                     return;
                 }
 
@@ -161,3 +189,6 @@ impl platform::Interruptable for SPIDev {
         spidev.cur_transfer = Some(transfer);
     }
 }
+
+
+impl ::arch::arm::SPIDriver for SPIDev {}

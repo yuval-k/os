@@ -10,6 +10,7 @@ use collections::boxed::Box;
 const SYS_TIMER_BASE_VADDR: ::mem::VirtualAddress = super::MMIO_VSTART.uoffset(0x3000);
 
 const TIMER_HZ : u32 = 1000_000;
+const DELTA_COUNTER : u32 = TIMER_HZ/(platform::ticks_in_second as u32);
 
 pub enum Matches {
 // can't use timers 0 and 2 as they are reservered for GPU
@@ -93,19 +94,22 @@ impl SystemTimerDriver {
 }
 
 impl InterruptableDriver for SystemTimerDriver {}
+
 impl Driver for SystemTimerDriver {
     fn attach(&mut self, dh : DriverHandle) {
         platform::get_platform_services().arch_services.interrupt_service.register_callback_on_intr(super::intr::Interrupts::TIMER3 as usize, dh);
+        
 
         let curcounter = {self.timer.borrow().counter_low.read()};
-        self.set_match(curcounter+100_000);
+        self.set_match(curcounter+DELTA_COUNTER);
     }
 }
+
 impl platform::Interruptable for SystemTimerDriver {
     fn interrupted(&self) {
         (self.callback)();
         // 100ms
-        self.add_to_match(100_000);
+        self.add_to_match(DELTA_COUNTER);
         self.clear();
     }
 }

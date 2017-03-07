@@ -1,11 +1,11 @@
 use volatile;
 use io;
-use device;
 
 
-pub use device::spi::ClockPhase;
-pub use device::spi::ClockPolarity;
-pub use device::spi::Hz;
+use device::spi::ClockPhase;
+use device::spi::ClockPolarity;
+use device::spi::Configuration;
+use device::spi::Hz;
 
 const SPI0_ADDR : ::mem::VirtualAddress = super::super::GPIO_BASE.uoffset(0x4000);
 
@@ -71,24 +71,30 @@ impl SPI {
         &mut *(SPI0_ADDR.0 as *mut SPI)
     }
 
-    pub fn confiure(&mut self, clock_pol : ClockPolarity, clock_phase : ClockPhase, speed : Hz) -> Result<(),()>{
+    pub fn confiure(&mut self, c : Configuration) -> Result<(),()>{
         let mut cs = ControlStatusFlags::empty();
         cs |= INTD | INTR;
-        cs |= match clock_pol {
-            ClockPolarity::ResetIsLow => ControlStatusFlags::empty(),
-            ClockPolarity::ResetIsHigh => CPOL,
-        };
-        cs |= match clock_phase {
-            ClockPhase::Middle => ControlStatusFlags::empty(),
-            ClockPhase::Begin => CPHA,
-        };
+        if let Some(clock_pol) = c.clock_polarity {
+            cs |= match clock_pol {
+                ClockPolarity::ResetIsLow => ControlStatusFlags::empty(),
+                ClockPolarity::ResetIsHigh => CPOL,
+            };
+        }
 
-        const APB_CLOCK : u32 = 250_000_000;
+        if let Some(clock_phase) = c.clock_phase {
+            cs |= match clock_phase {
+                ClockPhase::Middle => ControlStatusFlags::empty(),
+                ClockPhase::Begin => CPHA,
+            };
+        }
 
-        // only lower 16 bits count for clk
-        let divider = (((APB_CLOCK / speed.0) >> 1) << 1) as u16;
+        if let Some(speed) = c.speed {
+            const APB_CLOCK : u32 = 250_000_000;
 
-        self.clock_div.write(divider as u32);
+            // only lower 16 bits count for clk
+            let divider = (((APB_CLOCK / speed.0) >> 1) << 1) as u16;
+            self.clock_div.write(divider as u32);
+        }
         self.control_status.write(cs);
 
         Ok(())

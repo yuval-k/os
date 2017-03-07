@@ -34,8 +34,15 @@ impl Transfer {
     }
 }
 
-impl Drop for Transfer {
-    fn drop(&mut self) {
+
+pub struct Configuration {
+    pub clock_polarity : Option<ClockPolarity>,
+    pub clock_phase : Option<ClockPhase>,
+    pub speed : Option<Hz>,
+}
+
+impl Transfer {
+    pub fn done(mut self) {
         let buf =  mem::replace(&mut self.buf, vec![]);
         (self.callback.take().unwrap())(buf);
     }
@@ -43,8 +50,8 @@ impl Drop for Transfer {
 
 pub trait SPIMaster {
 
-    fn confiure(&mut self, clock_pol : ClockPolarity, clock_phase : ClockPhase, speed : Hz) -> Result<(),()>;
-    fn start_transfer(&mut self, t : Transfer) -> Result<(),()>;
+    fn confiure(&self, c : Configuration) -> Result<(),()>;
+    fn start_transfer(&self, t : Transfer) -> Result<(),()>;
 }
 
 pub fn get_spi_master() -> Option<&'static SPIMaster> {

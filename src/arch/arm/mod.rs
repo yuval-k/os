@@ -20,6 +20,7 @@ use core::ops;
 use alloc::rc::Rc;
 use collections::boxed::Box;
 use collections::Vec;
+use device;
 
 #[cfg(feature = "multicpu")]
 pub fn get_num_cpus() -> usize {
@@ -93,6 +94,7 @@ pub trait Driver{
 enum DriverHandleEnum {
     Regular(usize),
     Interruptable(usize),
+    SPI(usize),
 }
 
 #[derive(Clone, Copy)]
@@ -100,27 +102,35 @@ pub struct DriverHandle(DriverHandleEnum);
 
 pub trait InterruptableDriver : Driver+platform::Interruptable {}
 
+pub trait SPIDriver : Driver + device::spi::SPIMaster + platform::Interruptable {}
+
 pub struct DriverManager{
     drivers : Vec<Box<Driver>>,
-    interruptable : Vec<Box<InterruptableDriver>>
+    interruptable : Vec<Box<InterruptableDriver>>,
+    // TODO: unpub
+    pub spi : Vec<Box<SPIDriver>>,
 
 }
 
 impl DriverManager {
 
-    fn new() -> DriverManager {
+    pub fn new() -> DriverManager {
         DriverManager{
             drivers : vec![],
             interruptable : vec![],
+            spi : vec![],
         }
     }
 
-    fn attach_all(&mut self) {
+    pub fn attach_all(&mut self) {
         for (i,d) in self.drivers.iter_mut().enumerate() {
             d.attach(DriverHandle(DriverHandleEnum::Regular(i)));
         }
         for (i,d) in self.interruptable.iter_mut().enumerate() {
             d.attach(DriverHandle(DriverHandleEnum::Interruptable(i)));
+        }
+        for (i,d) in self.spi.iter_mut().enumerate() {
+            d.attach(DriverHandle(DriverHandleEnum::SPI(i)));
         }
     }
 
@@ -128,8 +138,10 @@ impl DriverManager {
       //  add_interruptable(self, d)
       let dh = DriverHandle(DriverHandleEnum::Regular(self.drivers.len()));
       self.drivers.push(Box::new(d));
+
       dh
     }
+    
     pub fn add_driver_interruptable<T : InterruptableDriver + 'static>(&mut self, d : T) -> DriverHandle {
       //  add_interruptable(self, d)
       let dh = DriverHandle(DriverHandleEnum::Interruptable(self.interruptable.len()));
@@ -137,11 +149,21 @@ impl DriverManager {
       dh
     }
 
-    fn driver_interrupted(&self, dh : DriverHandle) {
-        if let DriverHandleEnum::Interruptable(idx) = dh.0 {
-            self.interruptable[idx].interrupted();
-        } else {
-            panic!("driver not interruptable!")
+    pub fn add_driver_spi<T : SPIDriver + 'static>(&mut self, d : T) -> DriverHandle {
+      //  add_interruptable(self, d)
+      let dh = DriverHandle(DriverHandleEnum::SPI(self.interruptable.len()));
+      self.spi.push(Box::new(d));
+      dh
+    }
+
+
+
+    pub fn driver_interrupted(&self, dh : DriverHandle) {
+        match dh.0{
+            DriverHandleEnum::Interruptable(idx) => self.interruptable[idx].interrupted(),
+            DriverHandleEnum::SPI(idx) => self.spi[idx].interrupted(),
+            _ => panic!("driver not interruptable!"),
+
         }
     }
 }

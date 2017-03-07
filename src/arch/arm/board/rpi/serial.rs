@@ -1,7 +1,5 @@
-use device;
 use io;
 use super::super::super::pl011;
-use collections::boxed::Box;
 use super::gpio;
 
 const SERIAL_BASE_VADDR: ::mem::VirtualAddress = super::GPIO_BASE.uoffset(0x1000);
@@ -10,8 +8,8 @@ pub struct Serial {
     pl: &'static mut pl011::PL011,
 }
 
-const GPIOTX : usize =14;
-const GPIORX : usize =15;
+const GPIOTX : usize = 14;
+const GPIORX : usize = 15;
 
 impl Serial {
     pub fn new(gpio : &mut gpio::GPIO) -> Self {

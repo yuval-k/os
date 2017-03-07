@@ -158,8 +158,6 @@ pub fn write_to_console(s: &str) {
 
 pub struct PlatformServices {
 //    pic : Box<pic::PIC>
-    gpio :  &'static mut self::gpio::GPIO,
-    spi : spi::SPIDev,
 }
 
 impl PlatformServices{
@@ -174,13 +172,10 @@ impl PlatformServices{
 
 
 
-  let gpio = unsafe{gpio::GPIO::new()};
 
   // TODO: support PL interrupts: pic.register_callback_on_intr(handle, intr::Interrupts::UART as usize, serial.clone());
     unsafe {
             PlatformServices{
-                gpio : gpio,
-                spi : spi::SPIDev::new(),
             }
         }
     }
@@ -188,9 +183,30 @@ impl PlatformServices{
     // called futher down the init phase, after all hardware was initialized
     pub fn init_board(&mut self) {
 
-        let sourcehandle = &platform::get_platform_services().arch_services.interrupt_service.add_source(self::intr::PICDev::new());
+
+        let gpio = unsafe{gpio::GPIO::new()};
+
+        // set spi pins. TODO: move that to spi driver
+        gpio.set_function(7 , gpio::FunctionSelect::Function0);
+        gpio.set_function(8 , gpio::FunctionSelect::Function0);
+        gpio.set_function(9 , gpio::FunctionSelect::Function0);
+        gpio.set_function(10, gpio::FunctionSelect::Function0);
+        gpio.set_function(11, gpio::FunctionSelect::Function0);
+
+
+        let serial = serial::Serial::new(gpio);
+        unsafe {
+            device::serial::set_serial(Box::new(io::BusyWaitWriter::new(serial)));
+        }
+
+        platform::get_platform_services().arch_services.interrupt_service.add_source(self::intr::PICDev::new());
+
         let dm = unsafe{&mut platform::get_mut_platform_services().arch_services.driver_manager};
-        dm.add_driver_interruptable(timer::SystemTimerDriver::new( Box::new(move||{::platform::get_platform_services().clock()})));
+
+        let timer = timer::SystemTimerDriver::new( Box::new(move||{::platform::get_platform_services().clock()}));
+        dm.add_driver_interruptable(timer);
+        let spi = spi::SPIDev::new();
+        dm.add_driver_spi(spi);
 
 
       //  self.register_interrupts(pic);

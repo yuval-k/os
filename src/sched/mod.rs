@@ -279,7 +279,7 @@ impl Sched {
 
     pub fn unlock(&mut self) {}
 
-    // this method is called platform::ticks_in_second times a second
+    // this method is called about platform::ticks_in_second times a second
     pub fn clock(&self) {
         const DELTA_MILLIS: usize = (1000 / platform::ticks_in_second) as usize;
         // TODO fix time_since_boot_millies to be in cell?!

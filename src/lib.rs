@@ -33,6 +33,8 @@ pub mod platform;
 pub mod cpu;
 pub mod io;
 
+mod drivers;
+
 
 use collections::boxed::Box;
 use collections::Vec;
@@ -200,6 +202,34 @@ fn main_thread() {
                 }
             });
     }
+
+{
+
+        platform::get_platform_services()
+        .get_scheduler()
+        .spawn(move || {
+                let spi = &platform::get_platform_services()
+                    .arch_services.driver_manager.spi[0];
+                        
+                    spi.confiure(device::spi::Configuration{
+                                    clock_polarity : None,
+                                    clock_phase : None,
+                                    speed : Some(device::spi::Hz(800_000)),});
+                loop {
+
+                    let leds = [drivers::LED{red:0xff,green : 0, blue: 0},drivers::LED{red:0,green : 0xff, blue: 0},drivers::LED{red:0,green : 0, blue: 0xff}];
+                    let buf = drivers::drive_leds(&leds);
+                    spi.start_transfer(device::spi::Transfer::new(buf, 1, move|_|{
+                        // this is called from interrupt context, so can't do much here...
+                        let mut i = 1;
+                        i += 1;
+
+                    }));
+
+                        platform::get_platform_services().get_scheduler().sleep(1000);
+                }
+        });
+}
 }
 
 
